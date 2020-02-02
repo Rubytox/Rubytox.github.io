@@ -26,3 +26,9 @@
 *.exe
 *.out
 *.app
+
+# PhpStorm files
+.idea
+
+# Swap files
+*.swp

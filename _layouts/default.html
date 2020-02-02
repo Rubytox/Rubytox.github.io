@@ -26,6 +26,10 @@
 
         {{ content }}
 
+        <div class="jumbotron text-center" style="margin-bottom: 0; margin-top: 10px;">
+            <p>Copyright © 2020 Rubytox</p>
+        </div>
+
         <!-- Optional JavaScript -->
         <!-- jQuery first, then Popper.js, then Bootstrap JS -->
         <script src="https://code.jquery.com/jquery-3.4.1.slim.min.js" integrity="sha384-J6qa4849blE2+poT4WnyKhv5vZF5SrPo0iEjwBvKU7imGFAV0wwj1yYfoRSJoZ+n" crossorigin="anonymous"></script>
@@ -34,8 +38,9 @@
 
         <script>
             $('#navbarDropdownMenuLink').mouseover(function() {
-                $(this).dropdown('toggle')
-            })
+                $(this).dropdown('toggle');
+            });
+
             document.querySelectorAll('a[href^="#"]').forEach(anchor => {
                 anchor.addEventListener('click', function (e) {
                     e.preventDefault();
@@ -46,6 +51,5 @@
                 });
             });
         </script>
-    </body>
     </body>
 </html>

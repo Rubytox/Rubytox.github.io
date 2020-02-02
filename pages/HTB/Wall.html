@@ -1,5 +1,80 @@
 ---
-layout: default
+layout: htb_box
 title: "HTB: Wall"
+code: htb_wall
+date: "27th November 2019"
 ---
-<h1>Welcome to my first post!</h1>
+<div class="col-md-12" style="width: 90%; margin: auto">
+    <p>Hello everyone!</p>
+
+    <p>So about a week and a half ago, I decided that I would try to own my first box on Hackthebox.
+        I wanted to start with an easy one, so I chose Wall because a lot of people were saying this box was rather easy to own.
+        It was a really interesting first experience as I learned a lot of things, even if I had to look for a lot of clues and hints because there are a lot of concepts
+        I couldn’t think of by myself.</p>
+
+    <p>Before we start, I just want to say that this walkthrough might not be as a usual one: I will talk about what I tried, even if it didn’t work, and
+        I try to explain why what I did didn’t work, so it might be long and become kind of uninteresting at some point.
+        However, I think it is really instructive about what mistakes you maybe didn’t but might do at some point.</p>
+
+    <p>So, let’s get started! First, to make things easier I updated <code>/etc/hosts</code> in order to associate the IP address
+        10.10.10.157 with the name <code>wall.ctf</code>. Then, I used <code>nmap</code> to get the machine open ports, which gave me the following result:</p>
+    <pre><code>
+$ nmap -sV -sT -sC wall.ctf
+Starting Nmap 7.60 ( https://nmap.org ) at 2019-11-15 15:35 CET
+Nmap scan report for wall.ctf (10.10.10.157)
+Host is up (0.28s latency).
+Not shown: 998 closed ports
+PORT   STATE SERVICE VERSION
+22/tcp open  ssh     OpenSSH 7.6p1 Ubuntu 4ubuntu0.3 (Ubuntu Linux; protocol 2.0)
+| ssh-hostkey:
+|   2048 2e:93:41:04:23:ed:30:50:8d:0d:58:23:de:7f:2c:15 (RSA)
+|_  256 21:64:d0:c0:ff:1a:b4:29:0b:49:e1:11:81:b6:73:66 (EdDSA)
+80/tcp open  http    Apache httpd 2.4.29 (Ubuntu)
+|_http-server-header: Apache/2.4.29 (Ubuntu)
+|_http-title: Apache2 Ubuntu Default Page: It works
+Service Info: OS: Linux; CPE: cpe:/o:linux:linux_kernel
+Service detection performed. Please report any incorrect results at https://nmap.org/submit/ .
+Nmap done: 1 IP address (1 host up) scanned in 44.21 seconds
+</code></pre>
+
+    <p>Here is a nice snippet, look at it!</p>
+    <div id="wrapper" class="col-md-6">
+        <!-- Nav tabs -->
+        <ul id="codes" class="nav nav-tabs" role="tablist">
+            <li role="presentation" class="active">
+                <a href="#tab-1-content" aria-controls="home" role="tab" data-toggle="tab">Tab 1</a></li>
+            <li role="presentation">
+                <a href="#tab-2-content" aria-controls="profile" role="tab" data-toggle="tab">Tab 2</a
+            </li>
+        </ul>
+
+        <!-- Tab panes -->
+        <div class="tab-content">
+            <div role="tabpanel" class="tab-pane active" id="tab-1-content">
+    <pre class="prettyprint linenums lang-java">
+  // Everything is controlled with id="codes"
+  // lang-java class is added to &lt;pre&gt; to read # tag
+  &lt;ul id="codes" class="nav nav-tabs" role="tablist"&gt;
+    .......
+  &lt;/ul&gt;
+  //@Override prettyprint with custom colours
+  //Change the colour codes of the codes in here.
+  pre .str { color: #fdb839; } /* string   */
+  pre .kwd { color: #fdb839; }
+  pre .com { color: #B3B3B3; } /* comment  */
+  pre .typ { color: #fdb839; } /* type     */
+  pre .lit { color: #cd5c5c; } /* literal  */
+  pre .pun { color: #fdb839; } /* punctuation */
+  pre .pln { color: #fdb839; } /* plaintext */
+  pre .tag { color: #fdb839; } /* html/xml tag     */
+  pre .atn { color: #bdb76b; } /* attribute name   */
+  pre .atv { color: #fdb839; } /* attribute value  */
+  pre .dec { color: #fdb839; } /* decimal          */
+    </pre>
+        </div>
+    </div>
+
+    </div>
+    Pouet
+</div>
+

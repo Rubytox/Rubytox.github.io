@@ -3,12 +3,13 @@ layout: default
 title: {{ page.title }}
 ---
 
-<div class="col-md-12">
+<div class="col-md-12" style="margin: auto; width: 80%">
     <br/>
     <img src="../../img/{{ page.code }}/banner.png" alt="Banner" class="center" />
     <h1>{{ page.title }}</h1>
-    <h6>{{ page.date }}</h6>
-</div>
+    <h6>{{ page.author | capitalize }}, {{ page.date }}</h6>
+    <br />
 
 {{ content }}
 
+</div>

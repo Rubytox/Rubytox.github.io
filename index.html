@@ -12,17 +12,39 @@ title: IT Security
                 some posts about interesting security things I learned, as well as walkthroughs on CTF boxes or challenges.
                 I hope you find some interesting matters on this blog!</p>
 
-            <p>You will find on this home page the latest posts and writeups published</p>
+            <p>You will find on this home page the latest posts and writeups published. You may use the navigation
+                bar to find all the writeups or all the articles.</p>
         </div>
     </div>
     <hr />
     <div class="row">
         <div class="col-sm-6">
             <h2>Latest articles</h2>
-            <h5>Test</h5>
+            <ul class="custom-post-list">
+                {% for post in site.posts %}
+                    {% if post.path contains 'articles' %}
+                        <li>
+                            <strong>{{ post.title }}</strong>, {{ post.long_date }}
+                            {{ post.excerpt }}
+                            <a href="{{ post.url }}">Read more...</a>
+                        </li>
+                    {% endif %}
+                {% endfor %}
+            </ul>
         </div>
         <div class="col-sm-6">
             <h2>Latest writeups</h2>
+            <ul class="custom-post-list">
+            {% for post in site.posts %}
+                {% if post.path contains 'writeups' %}
+                    <li>
+                        <strong>{{ post.title }}</strong>, {{ post.long_date }}
+                        {{ post.excerpt }}
+                        <a href="{{ post.url }}">Read more...</a>
+                    </li>
+                {% endif %}
+            {% endfor %}
+            </ul>
         </div>
     </div>
 </div>

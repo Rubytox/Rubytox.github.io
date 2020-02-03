@@ -41,6 +41,11 @@
     font-style: italic;
 }
 
+.custom-post-list {
+    list-style-type: none;
+    padding-left: 0;
+}
+
 @media screen and (max-width: 580px) {
     .center {
         width: 50%;

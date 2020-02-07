@@ -6,3 +6,5 @@ vendor
 .idea/
 
 *.swp
+
+_posts/*unpublished*

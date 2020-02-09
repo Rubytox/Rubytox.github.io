@@ -46,6 +46,10 @@
     padding-left: 0;
 }
 
+.highlighted {
+    background-color: gray;
+}
+
 @media screen and (max-width: 580px) {
     .center {
         width: 50%;

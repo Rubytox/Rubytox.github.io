@@ -1,0 +1,68 @@
+---
+layout: article
+title: "Python Colors package"
+code: "python_colors"
+long_date: "27th February 2020"
+author: rubytox
+---
+
+<p>Hello to everyone!</p>
+
+<p>In this article, I'm presenting a little package I wrote for helping make outputs clearer in my Python scripts. This
+    package's functions aren't really optimal, but they are sufficient for how I use them. This article is here to help
+    uderstand some parts of my code that might be unclear because of the use of such functions.<!--more--></p>
+
+<p>Basically, the package provides the four following displays:</p>
+<img src="/img/article_{{ page.code}}/colors1.png" alt="Four displays" />
+
+<p>Here is the code for the package:</p>
+<pre class="prettyprint linenums">
+class Colors:
+    BLACK = "\033[30m"
+    RED = "\033[31m"
+    GREEN = "\033[32m"
+    YELLOW = "\033[33m"
+    BLUE = "\033[34m"
+    BOLD = "\033[1m"
+    NONE = "\033[0m"
+    BRED = BOLD + RED
+    BGREEN = BOLD + GREEN
+    BYELLOW = BOLD + YELLOW
+    BBLUE = BOLD + BLUE
+
+    @staticmethod
+    def info(msg, end='\n'):
+        print(Colors.BBYELLOW + "[~] " + str(msg) + Colors.NONE, end=end, flush=True)
+
+    @staticmethod
+    def success(msg, end='\n'):
+        print(Colors.BGREEN + "[+] " + str(msg) + Colors.NONE, end=end, flush=True)
+
+    @staticmethod
+    def fail(msg, end='\n'):
+        print(Colors.BRED + "[!] " + str(msg) + Colors.NONE, end=end, flush=True)
+
+    @staticmethod
+    def note(msg, end='\n'):
+        print(Colors.BBLUE + "[*] " + str(msg) + Colors.NONE, end=end, flush=True)
+</pre>
+
+<p>It is very simple: just import the class <code>Colors</code> from the package and use one of the four static
+    methods. The package comes as well with simplified codes for the basic colors I use in my script: we have black,
+    red, green, yellow and blue. There is a variable for bold as well, and one that removes all decoration. Eventually,
+    prefixing any color name with <code>B</code> represents the combination of the color in question and bold decoration.</p>
+
+<p>For instance, the example script I ran in the picture above is:</p>
+<pre class="prettyprint linenums">
+#!/usr/bin/env python3
+from colors import Colors
+
+Colors.info("This is an information.")
+Colors.success("Something went as expected!")
+Colors.fail("Something went wrong.")
+Colors.note("This is a note.")
+</pre>
+
+<p>That's all. This article is mostly to avoid any confusion if I use those functions in any of my scripts.</p>
+
+

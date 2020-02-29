@@ -29,7 +29,7 @@
     <body>
         <div class="jumbotron text-center" style="margin-bottom:0">
             <div class="container">
-                <h1><a href="/" style="text-decoration: none; color:white">IT Security</a> <br /><small>Security, challenges and boxes</small></h1>
+                <h1><a href="/" style="text-decoration: none; color:white" id="head-title">IT Security</a> <br /><small>Security, challenges and boxes</small></h1>
             </div>
         </div>
 
@@ -43,7 +43,7 @@
         </div>
         -->
 
-        <p class="text-center">Copyright © 2020 Rubytox</p>
+        <p class="text-center" style="padding-top: 20px; padding-bottom: 10px">Copyright © 2020 Rubytox</p>
 
         <!-- Optional JavaScript -->
         <!-- jQuery first, then Popper.js, then Bootstrap JS -->
@@ -52,6 +52,26 @@
         <script src="https://stackpath.bootstrapcdn.com/bootstrap/4.4.1/js/bootstrap.min.js" integrity="sha384-wfSDF2E50Y2D1uUdj0O3uMBJnjuUD4Ih7YwaYd1iqfktj0Uod8GCExl3Og8ifwB6" crossorigin="anonymous"></script>
 
         <script>
+            let darkModeDefined = localStorage.getItem("darkModeVar");
+            if (darkModeDefined == null) {
+                localStorage.setItem("darkModeVar", "true");
+            }
+
+            let darkMode = localStorage.getItem("darkModeVar");
+            if (darkMode !== "true") {
+                $('body, .jumbotron').css('background-color', 'white');
+                $('body, .jumbotron').css('color', 'black');
+                $('#head-title').css('color', 'black');
+                $('#darkmode-btn').text("Dark mode");
+            }
+            else {
+                $('body, .jumbotron').css('background-color', '#1e2125');
+                $('body, .jumbotron').css('color', '#949ba2');
+                $('#head-title').css('color', 'white');
+                $('#darkmode-btn').text("Light mode");
+            }
+
+
             $('#navbarDropdownMenuLink').mouseover(function() {
                 $(this).dropdown('toggle');
             });
@@ -65,6 +85,24 @@
                     });
                 });
             });
+
+            function toggleDarkMode() {
+                if (darkMode === "true") {
+                    $('body, .jumbotron').css('background-color', 'white');
+                    $('body, .jumbotron').css('color', 'black');
+                    $('#head-title').css('color', 'black');
+                    $('#darkmode-btn').text("Dark mode");
+                    darkMode = "false";
+                }
+                else {
+                    $('body, .jumbotron').css('background-color', '#1e2125');
+                    $('body, .jumbotron').css('color', '#949ba2');
+                    $('#head-title').css('color', 'white');
+                    $('#darkmode-btn').text("Light mode");
+                    darkMode = "true";
+                }
+                localStorage.setItem("darkModeVar", darkMode);
+            }
         </script>
     </body>
 </html>

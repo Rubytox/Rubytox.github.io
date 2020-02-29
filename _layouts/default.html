@@ -63,12 +63,14 @@
                 $('body, .jumbotron').css('color', 'black');
                 $('#head-title').css('color', 'black');
                 $('#darkmode-btn').text("Dark mode");
+                $('#darkmode-btn').removeClass("btn-light").addClass("btn-secondary");
             }
             else {
                 $('body, .jumbotron').css('background-color', '#1e2125');
                 $('body, .jumbotron').css('color', '#949ba2');
                 $('#head-title').css('color', 'white');
                 $('#darkmode-btn').text("Light mode");
+                $('#darkmode-btn').removeClass("btn-secondary").addClass("btn-light");
             }
 
 
@@ -92,6 +94,7 @@
                     $('body, .jumbotron').css('color', 'black');
                     $('#head-title').css('color', 'black');
                     $('#darkmode-btn').text("Dark mode");
+                    $('#darkmode-btn').removeClass("btn-light").addClass("btn-secondary");
                     darkMode = "false";
                 }
                 else {
@@ -99,6 +102,7 @@
                     $('body, .jumbotron').css('color', '#949ba2');
                     $('#head-title').css('color', 'white');
                     $('#darkmode-btn').text("Light mode");
+                    $('#darkmode-btn').removeClass("btn-secondary").addClass("btn-light");
                     darkMode = "true";
                 }
                 localStorage.setItem("darkModeVar", darkMode);

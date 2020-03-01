@@ -56,7 +56,8 @@
             let darkModeDefined = localStorage.getItem("darkModeVar");
             if (darkModeDefined == null) {
                 let dt = new Date();
-                if (8 <= dt.getHours() <= 18) {
+                let hours = dt.getHours();
+                if (8 <= hours && hours <= 18) {
                     localStorage.setItem("darkModeVar", "false");
                 }
                 else {

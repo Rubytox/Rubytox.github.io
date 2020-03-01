@@ -27,7 +27,7 @@ title: IT Security
                             <strong>{{ post.title }}</strong>, {{ post.long_date }}
                             {{ post.excerpt }}
                             <a href="{{ post.url }}">Read more...</a>
-                            <hr />
+                            {% unless forloop.last %}<hr />{% endunless %}
                         </li>
                     {% endif %}
                 {% endfor %}
@@ -42,7 +42,7 @@ title: IT Security
                         <strong>{{ post.title }}</strong>, {{ post.long_date }}
                         {{ post.excerpt }}
                         <a href="{{ post.url }}">Read more...</a>
-                        <hr />
+                        {% unless forloop.last %}<hr />{% endunless %}
                     </li>
                 {% endif %}
             {% endfor %}

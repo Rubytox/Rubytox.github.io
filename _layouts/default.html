@@ -53,19 +53,19 @@
         <script src="https://stackpath.bootstrapcdn.com/bootstrap/4.4.1/js/bootstrap.min.js" integrity="sha384-wfSDF2E50Y2D1uUdj0O3uMBJnjuUD4Ih7YwaYd1iqfktj0Uod8GCExl3Og8ifwB6" crossorigin="anonymous"></script>
 
         <script>
-            let darkModeDefined = localStorage.getItem("darkModeVar");
+            let darkModeDefined = sessionStorage.getItem("darkModeVar");
             if (darkModeDefined == null) {
                 let dt = new Date();
                 let hours = dt.getHours();
                 if (8 <= hours && hours <= 18) {
-                    localStorage.setItem("darkModeVar", "false");
+                    sessionStorage.setItem("darkModeVar", "false");
                 }
                 else {
-                    localStorage.setItem("darkModeVar", "true");
+                    sessionStorage.setItem("darkModeVar", "true");
                 }
             }
 
-            let darkMode = localStorage.getItem("darkModeVar");
+            let darkMode = sessionStorage.getItem("darkModeVar");
             if (darkMode !== "true") {
                 $('body, .jumbotron').css('background-color', 'white');
                 $('body, .jumbotron').css('color', 'black');
@@ -113,7 +113,7 @@
                     $('#darkmode-btn').removeClass("btn-secondary").addClass("btn-light");
                     darkMode = "true";
                 }
-                localStorage.setItem("darkModeVar", darkMode);
+                sessionStorage.setItem("darkModeVar", darkMode);
             }
         </script>
     </body>

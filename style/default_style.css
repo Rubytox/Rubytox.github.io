@@ -17,6 +17,10 @@ body, .jumbotron {
     font-family: "Hacked", serif;
 }
 
+#head-title {
+    font-size: 130%;
+}
+
 .center {
     display: block;
     margin-left: auto;

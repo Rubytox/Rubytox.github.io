@@ -87,7 +87,7 @@ Discovered open port 6379/tcp on 10.10.10.160
 <p><strong>Note:</strong> we have to specify the interface <code>tun0</code> because <code>masscan</code> doesn’t find anything if we don’t;
     guess he’s using the default interface if we don’t tell him.</p>
 
-<p>We found that the port 3679 is open! Browsing Google, we find that 3679 is the default port for the software
+<p>We found that the port 6379 is open! Browsing Google, we find that 6379 is the default port for the software
     Redis<sup><a href="#fn3" id="ref3">3</a></sup>: basically, it’s a software managing sort of a database. I didn’t find any interesting exploit for this,
     but there is a much easier way to get a shell: the tool <code>redis-cli</code> allows to manage the Redis software, and in our
     case, no password is required. So we can easily connect to the server using the following command:</p>
@@ -108,7 +108,7 @@ postman.ctf:6379>
 #!/bin/bash
 
 redis-cli -h postman.ctf -p 6379 flushall
-cat foo.txt | redis-cli -h postman.ctf -p 6379 -x set bb
+&lt;foo.txt redis-cli -h postman.ctf -p 6379 -x set bb
 redis-cli -h postman.ctf -p 6379 config set dir "/var/lib/redis/.ssh"
 redis-cli -h postman.ctf -p 6379 config set dbfilename "authorized_keys"
 redis-cli -h postman.ctf -p 6379 save
@@ -197,7 +197,7 @@ Matt@Postman:/var/lib/redis$ cat ~/user.txt
 <p>So we guessed right, and we owned user! Now, let’s own root.</p>
 
 <p>Starting from this point, I wanted so badly to use the first exploit I mentioned at the beginning of this post,
-    that I got stuck for some days. However, I realised that there might be other exploits which could work!
+    that I got stuck for some days. However, I realised that there might be other exploits that could work!
     In fact, there was another RCE using the package update functionality of Webmin: <a href="https://www.cvedetails.com/cve/CVE-2019-12840/">CVE-2019-12840</a>.
     With this exploit, we can use remote code execution in order to get a high privilege shell.
     For this box, we’re going to use Metasploit, as there already exists a module which does the work.</p>

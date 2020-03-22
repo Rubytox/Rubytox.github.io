@@ -331,6 +331,20 @@ f0481[-- REDACTED --]129cc
     Windows boxes. However, I still think I didn't understand everything, as I can't really explain some things or
     commands I used.</p>
 
+<p><strong>Note:</strong> do not forget to restore the changes you did with <code>aclpwn</code>. When using <code>aclpwn</code>,
+    the utility told us that a restore file has been saved under the name <code>aclpwn-20200322-130933.restore</code>. To
+    use it, we simply use the following command:</p>
+<pre class="prettyprint nocode">
+$ aclpwn -f svc-alfresco -ft user -d htb.local -du svc-alfresco -s 10.10.10.161 --restore aclpwn-20200322-130933.restore
+b'Please supply the password or LM:NTLM hashes for the account SVC-ALFRESCO@HTB.LOCAL: '
+[-] Removing ACE using SD restore approach[+] Domain Sync privileges restored successfully
+[-] Could not remove CN=svc-alfresco,OU=Service Accounts,DC=htb,DC=local from group CN=Exchange Trusted Subsystem,OU=Microsoft Exchange Security Groups,DC=htb,DC=local since they are not a member, your restore data may be out of date, continuing anyway!
+</pre>
+
+<p>Here, we see that the restore didn't work because maybe the system was reset before I used it, or any other possibility.
+    However, you should always do that after using <code>aclpwn</code> in order not to make the work too easy for the other
+    pentesters.</p>
+
 <p>So this is over for this box! If you have any comments or suggestions, feel free to open an issue on <a href="https://github.com/Rubytox/Rubytox.github.io">this website's GitHub page</a>.</p>
 
 

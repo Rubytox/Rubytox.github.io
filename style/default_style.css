@@ -118,3 +118,19 @@ hr {
     }
 }
 
+.column {
+    float: left;
+    width: 50%;
+    padding: 5px;
+}
+
+.row::after {
+    content: "";
+    clear: both;
+    display: table;
+}
+
+.password {
+    color: #6D071A;
+    font-weight: bold;
+}

@@ -134,3 +134,8 @@ hr {
     color: #6D071A;
     font-weight: bold;
 }
+
+iframe {
+    display: block;
+    margin: 0 auto;
+}

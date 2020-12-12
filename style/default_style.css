@@ -8,9 +8,38 @@ body, .jumbotron {
 
 @font-face {
     font-family: "Hacked";
-    src: url("/style/fonts/hacked.ttf");
-    src: url("/style/fonts/hacked.woff") format("woff"),
-    url("/style/fonts/hacked.woff2") format("woff2");
+    src: url("/style/fonts/hacked/hacked.ttf");
+    src: url("/style/fonts/hacked/hacked.woff") format("woff"),
+    url("/style/fonts/hacked/hacked.woff2") format("woff2");
+}
+
+@font-face {
+    font-family: "Tengwar Annatar";
+    src: url("/style/fonts/tengwar_annatar/tngan.ttf");
+}
+
+@font-face {
+    font-family: "Tengwar Annatar";
+    src: url("/style/fonts/tengwar_annatar/tnganb.ttf");
+    font-weight: bold;
+}
+
+@font-face {
+    font-family: "Tengwar Annatar";
+    src: url("/style/fonts/tengwar_annatar/tngani.ttf");
+    font-style: italic, oblique;
+}
+
+@font-face {
+    font-family: "Tengwar Annatar";
+    src: url("/style/fonts/tengwar_annatar/tngan.ttf");
+    font-weight: bold;
+    font-style: italic, oblique;
+}
+
+@font-face {
+    font-family: "Tengwar Feanor";
+    src: url("/style/fonts/tengwar_feanor/tengwarfeanorregular.ttf");
 }
 
 .jumbotron {

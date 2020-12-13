@@ -19,6 +19,11 @@ body, .jumbotron {
 }
 
 @font-face {
+    font-family: "Tengwar Annatar alt";
+    src: url("/style/fonts/tengwar_annatar/TengwarAnnatar-RpaW.ttf");
+}
+
+@font-face {
     font-family: "Tengwar Annatar";
     src: url("/style/fonts/tengwar_annatar/tnganb.ttf");
     font-weight: bold;

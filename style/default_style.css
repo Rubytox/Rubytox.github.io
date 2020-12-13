@@ -42,8 +42,20 @@ body, .jumbotron {
     src: url("/style/fonts/tengwar_feanor/tengwarfeanorregular.ttf");
 }
 
+@font-face {
+    font-family: "Stay Classy";
+    src: url("/style/fonts/stay_classy/Stay_classy.ttf");
+    src: url("/style/fonts/stay_classy/Stay_classy.otf") format("opentype");
+}
+
+
 .jumbotron {
-    font-family: "Hacked", serif;
+    /* font-family: "Hacked", serif; */
+    font-family: "Tengwar Feanor", serif;
+}
+
+body {
+    font-family: "Times New Roman", serif;
 }
 
 #head-title {

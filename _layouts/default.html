@@ -53,6 +53,11 @@
         <script src="https://stackpath.bootstrapcdn.com/bootstrap/4.4.1/js/bootstrap.min.js" integrity="sha384-wfSDF2E50Y2D1uUdj0O3uMBJnjuUD4Ih7YwaYd1iqfktj0Uod8GCExl3Og8ifwB6" crossorigin="anonymous"></script>
 
         <script>
+            var get = [];
+            location.search.replace('?', '').split('&').forEach(function (val) {
+                split = val.split("=", 2);
+                get[split[0]] = split[1];
+            });
             let darkModeDefined = sessionStorage.getItem("darkModeVar");
             if (darkModeDefined == null) {
                 let dt = new Date();
@@ -79,6 +84,14 @@
                 $('#head-title').css('color', 'white');
                 $('#darkmode-btn').text("Light mode");
                 $('#darkmode-btn').removeClass("btn-secondary").addClass("btn-light");
+            }
+
+            if (get['elvish'] != null) {
+                $('body, .jumbotron').css('font-family', '"Tengwar Feanor", serif');
+            }
+            else {
+                $('body').css('font-family', 'sans-serif');
+                $('.jumbotron').css('font-family', '"Hacked", "sans-serif"');
             }
 
 
@@ -115,6 +128,18 @@
                 }
                 sessionStorage.setItem("darkModeVar", darkMode);
             }
+
+            $(document).ready(function() {
+                $('a').click(function(event) {
+                    if (get['elvish'] != null) {
+                        // Stop the link from redirecting
+                        event.preventDefault();
+
+                        // Redirect instead with JavaScript
+                        window.location.href = $(this).attr('href') + '?elvish=' + get['elvish'];
+                    }
+                });
+            });
 
             $(".evil-winrm-prefix").html("<span style='color: red;'>*Evil-WinRM*</span> <span style='color: yellow; font-weight: bold'>PS</span>");
         </script>

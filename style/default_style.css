@@ -185,3 +185,7 @@ iframe {
     display: block;
     margin: 0 auto;
 }
+
+.pub-link img {
+    display: inline;
+}

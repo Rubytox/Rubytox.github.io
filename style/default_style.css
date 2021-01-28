@@ -186,6 +186,23 @@ iframe {
     margin: 0 auto;
 }
 
+.pub-name {
+    font-weight: bold;
+}
+
+.pub-authors {
+}
+
+.pub-date {
+    font-style: italic;
+}
+
+.publications {
+    line-height: 1.4;
+}
+
 .pub-link img {
     display: inline;
+    height: 1.6em;
+    vertical-align: text-top;
 }

@@ -20,6 +20,8 @@ gem "minima", "~> 2.5"
 
 gem "github-pages", "~> 204", group: :jekyll_plugins
 
+gem "nokogiri", ">= 1.11.0"
+
 # Windows and JRuby does not include zoneinfo files, so bundle the tzinfo-data gem
 # and associated library.
 install_if -> { RUBY_PLATFORM =~ %r!mingw|mswin|java! } do

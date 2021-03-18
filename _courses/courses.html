@@ -15,7 +15,7 @@ permalink: /courses/
     <h3>Chapters of the network class</h3>
     <ul>
         {% for post in site.courses %}
-        {% if post.path contains 'network' %}
+        {% if post.path contains 'network' and post.path contains '0' %}
             <li>
                 <strong>{{ post.title }}</strong>: <a href="{{ post.url }}">read here</a>
             </li>

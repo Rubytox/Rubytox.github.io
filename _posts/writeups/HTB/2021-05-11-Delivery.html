@@ -1,0 +1,179 @@
+---
+layout: htb_box
+title: "HTB: Delivery"
+code: htb_delivery
+long_date: "21th May 2021"
+author: rubytox
+---
+<p>Hello everyone!</p>
+
+<p>Today, I'm publishing a new writeup for <a href="https://www.hackthebox.eu">HackTheBox</a>'s box <a href="https://app.hackthebox.eu/machines/Delivery">Delivery</a>. This machine was made by <a href="https://app.hackthebox.eu/users/3769">ippsec</a> and has been rated as easy difficulty. It has been given a rating of 4.6.</p>
+
+<p>This machine was really interesting: it is really suitable for beginners in the field of pentest as it contains a lot of basic stuff. A significant part of the exploitation is not strictly speaking technical, which might prevent beginners from quickly giving up.<!--more--></p>
+
+<h3>Foothold & user</h3>
+<p>First, let's append the IP address of the machine to our <code>/etc/hosts</code> file so that we will be able to designate it by the domain name <code>delivery.htb</code>. Once this is done, let's run a classic <code>nmap</code> port scan:</p>
+<pre class="prettyprint nocode">
+$ nmap -sC -sV -oA nmap/delivery delivery.htb
+Starting Nmap 7.80 ( https://nmap.org ) at 2021-05-21 17:35 CEST
+Nmap scan report for delivery.htb (10.10.10.222)
+Host is up (0.038s latency).
+Not shown: 998 closed ports
+PORT   STATE SERVICE VERSION
+22/tcp open  ssh     OpenSSH 7.9p1 Debian 10+deb10u2 (protocol 2.0)
+| ssh-hostkey:
+|   2048 9c:40:fa:85:9b:01:ac:ac:0e:bc:0c:19:51:8a:ee:27 (RSA)
+|   256 5a:0c:c0:3b:9b:76:55:2e:6e:c4:f4:b9:5d:76:17:09 (ECDSA)
+|_  256 b7:9d:f7:48:9d:a2:f2:76:30:fd:42:d3:35:3a:80:8c (ED25519)
+80/tcp open  http    nginx 1.14.2
+|_http-server-header: nginx/1.14.2
+|_http-title: Welcome
+Service Info: OS: Linux; CPE: cpe:/o:linux:linux_kernel
+
+Service detection performed. Please report any incorrect results at https://nmap.org/submit/ .
+Nmap done: 1 IP address (1 host up) scanned in 8.59 seconds
+</pre>
+The options used in this command are:
+<ul>
+    <li><code>-sC</code>: this option instructs <code>nmap</code> to run basic enumeration scripts against the target machine,</li>
+    <li><code>-sV</code>: this option allows us to get the version of the services running on the identified open ports,</li>
+    <li><code>-oA</code>: the output of the port scan will be saved under several formats.</li>
+</ul>
+
+<p>We can see we have two open ports:</p>
+<ul>
+    <li>port 22: an OpenSSH server is running on this port, it may be useful for us if we want to connect to a user's account on the machine,</li>
+    <li>port 80: an nginx web server is running on this port.</li>
+</ul>
+
+<p>After a quick search, those two services do not seem to be vulnerable to any public exploit. Let's take a look at the website that is running on port 80:</p>
+<figure>
+    <img src="/img/{{ page.code }}/delivery1.png" alt="Home page of the website" />
+    <figcaption>Home page of the website</figcaption>
+</figure>
+<p>Clicking on the "Contact us" button opens the following text box:</p>
+<figure>
+    <img src="/img/{{ page.code }}/delivery2.png" alt="Contact information" />
+    <figcaption>Contact information</figcaption>
+</figure>
+
+<p>This contact box provides us with two new addresses:</p>
+<ul>
+    <li><code>helpdesk.delivery.htb</code>: we have to add this domain name to the <code>/etc/hosts</code> in order to access it,</li>
+    <li><code>delivery.htb:8065</code>: this seems to be a Mattermost server.</li>
+</ul>
+
+<p>After carefully reading the contact box, we can have an idea of what is expected from us: in order to access the Mattermost server, we want to get an @delivery.htb email address, and to do so we must go to the HelpDesk page. So let's do that! Browsing to the HelpDesk gives the following page:</p>
+<figure>
+    <img src="/img/{{ page.code }}/delivery3.png" alt="HelpDesk home page" />
+    <figcaption>HelpDesk home page</figcaption>
+</figure>
+
+<p>Let's try and open a new ticket to see what it does. We are asked for an e-mail address, a name and a description of the issue. After having filled all the fields and submitted the form, we get the following message:</p>
+<figure>
+    <img src="/img/{{ page.code }}/delivery4.png" alt="We get an @delivery.htb email address" />
+    <figcaption>We are given an @delivery.htb email address</figcaption>
+</figure>
+
+<p>Our ticket has been successfully created, and we have been given an @delivery.htb email address. Using it is actually quite simple: the purpose of this email address is to allow the person who opened the ticket to provide more information to their request. Hence sending an email to this address should add the content of the email to the ticket status page.</p>
+
+<p>We are going to use this to create ourselves a Mattermost account on the machine:</p>
+<div class="row">
+    <figure class="column">
+        <img src="/img/{{ page.code }}/delivery5.png" alt="Account creation" />
+        <figcaption>Account creation with the provided address</figcaption>
+    </figure>
+    <figure class="column">
+        <img src="/img/{{ page.code }}/delivery6.png" alt="Validation link" />
+        <figcaption>Validation link is received</figcaption>
+    </figure>
+</div>
+
+<p>As we can see, we successfully received a validation link, and our Mattermost account has been properly created. When connecting to it, we can read the following messages in the main channel:</p>
+<figure>
+    <img src="/img/{{ page.code }}/delivery7.png" alt="root provides information about credentials" />
+    <figcaption>User root gives us information about credentials</figcaption>
+</figure>
+
+<p>We are given the following information:</p>
+<ul>
+    <li>The user <code>maildeliverer</code> uses the password <code>Youve_G0t_Mail!</code>,</li>
+    <li>A lot of users are using a password that is a variation of <code>PleaseSubscribe!</code>.</li>
+</ul>
+
+<p>Let's try the first credentials on the SSH server:</p>
+<pre class="prettyprint nocode">
+$ ssh maildeliverer@delivery.htb
+maildeliverer@delivery.htb's password: <span class="password">Youve_G0t_Mail!</span>
+maildeliverer@Delivery:~$ cat user.txt
+9dfd3[-- REDACTED --]ee6cb
+</pre>
+
+<p>We owned user! :)</p>
+
+<h3>Root</h3>
+<p>Now on to owning root. If we recall correctly the information provided in the Mattermost server, user root said that if someone were to get the hash of a password of one of the developers, they could easily crack it. One idea would be to look for a hash in Mattermost's database.</p>
+
+<p>Mattermost's documentation states that database credentials are located in the file <code>config.json</code>, in the field <code>SqlSettings.DataSource</code>. We were able to find the root directory of Mattermost in the directory <code>/opt</code>, and we read the following in the configuration file:</p>
+<figure>
+    <img src="/img/{{ page.code }}/delivery8.png" alt="Credentials for Mattermost's database" />
+    <figcaption>Credentials for Mattermost's database</figcaption>
+</figure>
+<p>So we learn that the user used to access the database is called <code>mmuser</code> and it uses the password <code>Crack_The_MM_Admin_PW</code>. We connect using <code>mysql</code>, we select the correct database and display the usernames and password hashes of all the users:</p>
+<pre class="prettyprint nocode">
+$ mysql --user="mmuser" --password="Crack_The_MM_Admin_PW"
+MariaDB [(none)]> use mattermost;
+MariaDB [mattermost]> select Username, Password from Users;
++----------------------------------+--------------------------------------------------------------+
+| Username                         | Password                                                     |
++----------------------------------+--------------------------------------------------------------+
+| surveybot                        |                                                              |
+| c3ecacacc7b94f909d04dbfd308a9b93 | $2a$10$u5815SIBe2Fq1FZlv9S8I.VjU3zeSPBrIEg9wvpiLaS7ImuiItEiK |
+| 5b785171bfb34762a933e127630c4860 | $2a$10$3m0quqyvCE8Z/R1gFcCOWO6tEj6FtqtBn8fRAXQXmaKmg.HDGpS/G |
+| <span class="important">root</span>                             | <span class="important">$2a$10$VM6EeymRxJ29r8Wjkr8Dtev0O.1STWb4.4ScG.anuu7v0EFJwgjjO</span> |
+| ff0a21fc6fc2488195e16ea854c963ee | $2a$10$RnJsISTLc9W3iUcUggl1KOG9vqADED24CQcQ8zvUm1Ir9pxS.Pduq |
+| channelexport                    |                                                              |
+| 9ecfb4be145d47fda0724f697f35ffaf | $2a$10$s.cLPSjAVgawGOJwB7vrqenPg2lrDtOECRtjwWahOzHfq1CoFyFqm |
++----------------------------------+--------------------------------------------------------------+
+7 rows in set (0.000 sec)
+</pre>
+
+<p>We got a hash for the password of the user root. We can try to crack it using John the Ripper or hashcat. I prefer using John the Ripper, so I will show how it works using this tool. We first copy root's hash in a file <code>hash</code>. We then need a wordlist: we write <code>PleaseSubscribe!</code> in a file <code>wordlist</code>. Now, as root said it in the Mattermost server, running John on this wordlist or a larger one such as rockyou won't work: this correct password is not inside those wordlists. However, we can instruct John to apply rules on the provided wordlist: it will try cracking the hash using several variations of the words in the wordlist. In our case, our wordlists contains only one word, but we know the hash is a variation of this word. We can use the set of rules <code>best64</code>: they contain the mostly used password variations.</p>
+<pre class="prettyprint nocode">
+$ john hash --wordlist=wordlist --rules=best64
+Using default input encoding: UTF-8
+Loaded 1 password hash (bcrypt [Blowfish 32/64 X3])
+Cost 1 (iteration count) is 1024 for all loaded hashes
+Will run 5 OpenMP threads
+Press 'q' or Ctrl-C to abort, almost any other key for status
+PleaseSubscribe!21 (?)
+1g 0:00:00:00 DONE (2021-05-21 18:43) 4.347g/s 195.6p/s 195.6c/s 195.6C/s PleaseSubscribe!..PleaseSubscribe!
+Use the "--show" option to display all of the cracked passwords reliably
+Session completed.
+</pre>
+
+<p>So John identified the hash as a <code>bcrypt</code> hash. We could have used other tools such as <code>hashid</code> to identify the hash type as well. John cracked the hash and came up with the password <code>PleaseSubscribe!21</code>.</p>
+
+<p>Now, we got the password of the user root <strong>of the Mattermost server</strong>. Nothing guarantees that this password is the same as the password of the root user of the machine. We might try it anyways:</p>
+<pre class="prettyprint nocode">
+maildeliverer@Delivery:~$ su - root
+Password: <span class="password">PleaseSubscribe!21</span>
+root@Delivery:~# cat /root/root.txt
+37f6a[-- REDACTED --]e2006
+</pre>
+
+<p>We got root! :)</p>
+
+<p>I really liked doing this machine: as I didn't do any pentest challenge for a while, it was pretty refreshing to work on an easy-rated box that was actually easy. I think completing such a box is really appropriate for beginners in this field as they are going to learn a lot about the spirit of pentesting doing so.</p>
+
+<p>So this is over for this box! If you have any comments or suggestions, feel free to open an issue on <a href="https://github.com/Rubytox/Rubytox.github.io">this website's GitHub page</a>.</p>
+
+
+<!-- Footnotes -->
+
+<hr />
+
+<sup id="fn1">1. <a href="https://github.com/OJ/gobuster"><code>gobuster</code>'s GitHub page</a><a href="#ref1" title="Jump back to footnote 1 in the text.">↩</a></sup>
+<br>
+
+<sup id="fn2">2. <a href="https://www.adminer.org/">Adminer's home page</a><a href="#ref2" title="Jump back to footnote 2 in the text.">↩</a></sup>

@@ -78,6 +78,11 @@ hr {
     border-color: #949ba2;
 }
 
+.important {
+    color: red;
+    font-weight: bold;
+}
+
 .prettyprint {
     padding-top: 10px;
     padding-bottom: 10px;
@@ -95,7 +100,16 @@ hr {
 
 .post {
     margin: auto;
-    width: 80%
+    width: 80%;
+    counter-reset: figures;
+}
+
+figure {
+    counter-increment: figures;
+}
+
+figure figcaption:before {
+    content: 'Figure ' counter(figures) ': ';
 }
 
 .nocode {
